@@ -12,6 +12,7 @@ Hosted on **Netlify**: a static site built from `public/`, one **Netlify Functio
 | AI mentor | `claude-haiku-4-5` ($1 / $5 per million input/output tokens). One reply ≈ $0.005, so the default cap of 5 replies per user per day costs at most ~$0.025 per active user per day. |
 | Hard spend ceiling | `GLOBAL_DAILY_REPLIES` (default 1000/day ≈ $5/day worst case). Also set a monthly spend limit in the Anthropic Console. |
 | Free path | Without the AI mentor, learners still get the real-world answer after each layer — costs nothing. |
+| Explore any machine | Signed-in learners can type any machine and Claude writes a new 5-layer lesson (≈ $0.01 each on Haiku). Each topic is written once and cached, so the next learner who asks for it costs nothing. Capped at 2 new topics per user per day, 200 site-wide. |
 
 Keep the AI caps low until AdSense shows your real revenue per 1,000 page views, then raise `FREE_DAILY_REPLIES` only as far as revenue covers it.
 
@@ -29,7 +30,9 @@ netlify.toml
 tools/generate_system.py   write new systems with Claude (one-time cost per system)
 ```
 
-API: `POST /api/login` (username + PIN; unknown usernames are created), `GET/PUT /api/progress`, `GET /api/me`, `POST /api/mentor`, `POST /api/logout`, `GET /api/config`.
+API: `POST /api/login` (username + PIN; unknown usernames are created), `GET/PUT /api/progress`, `GET /api/me`, `POST /api/mentor`, `POST /api/generate` (write a lesson for a typed topic), `GET /api/topic/:id` (a generated topic, for shared links), `POST /api/logout`, `GET /api/config`.
+
+Generated topics live in the `topics` Blobs store and open at `/s/x-<slug>`. They aren't in the sitemap and aren't reviewed. To make a good one a permanent, indexed page, review it and add it to `public/systems.json` (or regenerate it with `tools/generate_system.py`).
 
 ## Deploy
 
@@ -101,6 +104,10 @@ The generator uses `claude-opus-5` for quality (a few cents per system) with ser
 | `IP_DAILY_REPLIES` | 15 | Per IP address per day — stops one person farming usernames |
 | `GLOBAL_DAILY_REPLIES` | 1000 | Whole-site ceiling per day |
 | `SIGNUPS_PER_IP_DAILY` | 5 | New usernames per IP per day |
+| `GEN_MODEL` | `MODEL` | Model that writes explored topics |
+| `GEN_DAILY` | 2 | New topics per user per day (cached topics are free) |
+| `GEN_IP_DAILY` | 4 | New topics per IP per day |
+| `GEN_GLOBAL_DAILY` | 200 | New topics site-wide per day |
 | `ADSENSE_CLIENT`, `AD_SLOT_TOP`, `AD_SLOT_SIDE`, `AD_SLOT_BOTTOM` | empty | AdSense; used at build time, so redeploy after changing |
 | `SITE_URL` | Netlify's `URL` | Override the site URL used in the sitemap and canonical links |
 

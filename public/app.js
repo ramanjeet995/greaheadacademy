@@ -27,7 +27,7 @@ const lvl = (i) => LEVELS[Math.min(i, LEVELS.length - 1)];
 // ---------------------------------------------------------------- local state (per browser)
 function readLS(k, dflt) { try { return JSON.parse(localStorage.getItem(k)) ?? dflt; } catch { return dflt; } }
 function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-const state = Object.assign({ field: "mechanical", sessions: {}, aiOn: true }, readLS("ga-state", {}));
+const state = Object.assign({ field: "mechanical", sessions: {}, custom: [], aiOn: true }, readLS("ga-state", {}));
 let auth = readLS("ga-auth", null); // {token, username, remaining}
 let freeDaily = 5;
 
@@ -40,7 +40,7 @@ function save() {
 }
 async function pushProgress() {
   if (!auth) return;
-  try { await api("/api/progress", { method: "PUT", body: JSON.stringify({ sessions: state.sessions }) }); } catch {}
+  try { await api("/api/progress", { method: "PUT", body: JSON.stringify({ sessions: state.sessions, custom: state.custom }) }); } catch {}
 }
 
 // ---------------------------------------------------------------- API
@@ -57,12 +57,31 @@ async function api(path, opts = {}) {
 }
 
 // ---------------------------------------------------------------- routing
-const byId = (id) => SYSTEMS.find((s) => s.id === id);
+const allSystems = () => [...SYSTEMS, ...state.custom];
+const byId = (id) => allSystems().find((s) => s.id === id);
 const systemsOf = () => SYSTEMS.filter((s) => s.field === state.field);
+const customOf = () => state.custom.filter((s) => s.field === state.field);
 function currentView() {
   const m = location.pathname.match(/^\/s\/([a-z0-9-]+)\/?$/);
   if (m && byId(m[1])) { state.field = byId(m[1]).field; return { type: "sys", id: m[1] }; }
+  if (m && m[1].startsWith("x-")) { loadTopic(m[1]); return { type: "loading", id: m[1] }; }
   return { type: "home" };
+}
+// A topic someone else explored (shared link) — fetch it once, then keep it in "Your topics".
+const loadingTopics = new Set();
+async function loadTopic(id) {
+  if (loadingTopics.has(id)) return;
+  loadingTopics.add(id);
+  try {
+    const r = await fetch(`/api/topic/${id}`);
+    if (!r.ok) throw new Error();
+    const sys = (await r.json()).system;
+    if (!byId(sys.id)) { state.custom.push(sys); save(); }
+  } catch {
+    $("sheet").innerHTML = `<p class="err">That topic couldn't be found. <a href="/" data-nav="home">Back to all systems</a></p>`;
+    return;
+  } finally { loadingTopics.delete(id); }
+  renderAll(false);
 }
 function go(v) {
   const path = v.type === "sys" ? `/s/${v.id}` : "/";
@@ -103,7 +122,7 @@ function renderAccount() {
       <div class="note">AI replies left today: <b>${auth.remaining ?? "–"}</b> of ${freeDaily}. Without the AI mentor you still get the real-world answer after each layer.</div>
       <button class="link" id="logoutBtn" style="justify-self:start">Sign out</button>`;
     $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); };
-    $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAccount(); };
+    $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAll(false); };
   } else {
     box.innerHTML = `<form id="loginForm">
       <div class="note"><b>Save your progress</b> and unlock ${freeDaily} AI mentor replies a day. Pick any username and a PIN — new usernames are created automatically.</div>
@@ -122,26 +141,65 @@ async function login() {
     auth = { token: r.token, username: r.username, remaining: r.remaining };
     writeLS("ga-auth", auth);
     const p = await api("/api/progress");
-    mergeProgress(p.data?.sessions || {});
+    mergeProgress(p.data);
     save(); await pushProgress();
     renderAll(false);
   } catch (e) { msg.textContent = e.data?.message || "Couldn't sign in. Check your connection and try again."; }
 }
-// Keep whichever copy of each system has gone further.
+// Keep whichever copy of each system has gone further, and every custom topic from either side.
 function mergeProgress(server) {
+  if (!server) return;
   const score = (s) => (s ? (s.done ? 1000 : 0) + s.layer * 50 + (s.thread?.length || 0) : -1);
-  for (const [id, s] of Object.entries(server)) if (score(s) > score(state.sessions[id])) state.sessions[id] = s;
+  for (const [id, s] of Object.entries(server.sessions || {})) if (score(s) > score(state.sessions[id])) state.sessions[id] = s;
+  for (const sys of server.custom || []) if (!byId(sys.id)) state.custom.push(sys);
 }
 function renderPath(v) {
-  const list = systemsOf();
-  $("path").innerHTML = `<h2>${esc(FIELDS.find((f) => f.id === state.field).name)} systems</h2><ol class="syslist">` +
-    list.map((s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${v.type === "sys" && v.id === s.id ? `aria-current="page"` : ""}>
-      <span>${esc(s.title)}</span><span class="era">${esc(s.era || "")}</span>${dots(s)}</a></li>`).join("") + `</ol>`;
+  const item = (s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${v.type === "sys" && v.id === s.id ? `aria-current="page"` : ""}>
+      <span>${esc(s.title)}</span><span class="era">${esc(s.era || "")}</span>${dots(s)}</a></li>`;
+  const mine = customOf();
+  $("path").innerHTML = `<h2>${esc(FIELDS.find((f) => f.id === state.field).name)} systems</h2><ol class="syslist">${systemsOf().map(item).join("")}</ol>`
+    + (mine.length ? `<h2 style="margin-top:18px">Your topics</h2><ol class="syslist">${mine.map(item).join("")}</ol>` : "")
+    + exploreForm("side");
+  bindExplore("side");
+  const list = [...systemsOf(), ...mine];
   const done = list.filter((s) => state.sessions[s.id]?.done).length;
   $("doneCount").textContent = `${done}/${list.length}`;
   $("doneBar").style.width = (list.length ? (done / list.length) * 100 : 0) + "%";
 }
-function renderMain(v) { v.type === "home" ? renderHome() : renderSession(byId(v.id)); }
+function renderMain(v) {
+  if (v.type === "loading") { $("sheet").innerHTML = `<p class="thinking">Loading this topic</p>`; return; }
+  v.type === "home" ? renderHome() : renderSession(byId(v.id));
+}
+
+// ---------------------------------------------------------------- explore any topic
+function exploreForm(where) {
+  return `<form class="explore ${where}" id="explore-${where}">
+    <label for="topic-${where}">${where === "home" ? "Explore any machine" : "Explore another machine"}</label>
+    <div class="row"><input type="text" id="topic-${where}" maxlength="60" placeholder="${state.field === "mechanical" ? "e.g. Bicycle gears, Door lock, Jet engine" : "e.g. 3D printer, Car starter motor, Drone"}">
+    <button class="btn ${where === "home" ? "primary" : ""}" type="submit">Explore</button></div>
+    <span class="note" id="topicMsg-${where}">${auth ? "Writes a new 5-layer lesson. Uses 1 of today's new-topic allowance." : "Sign in to explore new topics."}</span></form>`;
+}
+function bindExplore(where) {
+  const f = $(`explore-${where}`);
+  if (f) f.onsubmit = (e) => { e.preventDefault(); explore(where); };
+}
+async function explore(where) {
+  const input = $(`topic-${where}`), msg = $(`topicMsg-${where}`), btn = $(`explore-${where}`).querySelector("button");
+  const topic = input.value.trim().replace(/\s+/g, " ");
+  if (topic.length < 3) { msg.textContent = "Type a machine or system, e.g. \"bicycle gears\"."; input.focus(); return; }
+  if (!auth) { msg.textContent = "Sign in on the left first — any username and PIN."; $("uName")?.focus(); return; }
+  btn.disabled = true;
+  msg.innerHTML = `<span class="thinking">Writing a lesson on ${esc(topic)}</span>`;
+  try {
+    const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic, field: state.field }) });
+    const sys = r.system;
+    if (!byId(sys.id)) { state.custom.push(sys); save(); }
+    go({ type: "sys", id: sys.id });
+  } catch (e) {
+    msg.textContent = e.data?.message || "Couldn't write that lesson. Try again.";
+    btn.disabled = false;
+  }
+}
 function renderNotes(v) {
   const sys = v.type === "sys" ? byId(v.id) : null;
   if (!sys) {
@@ -166,6 +224,7 @@ function renderHome() {
     <h3 class="ptitle">Pick a system to design</h3>
     <p class="intro">You'll be asked how you would make it work. Answer in plain words — parts, how they connect, how they move, why you'd choose them. No calculations. You'll see how your method compares with real designs, then go one layer deeper, following the mechanism you chose.</p>
     <ol class="ladder">${LEVELS.map((l, i) => `<li style="--c:${l.color}"><span class="lvl">Layer ${i + 1} · ${l.name}</span><span>${LAYER_BLURBS[i]}</span></li>`).join("")}</ol>
+    ${exploreForm("home")}
     <h4 class="sec">Systems</h4>
     <div class="cards">${list.map((s) => {
       const st = state.sessions[s.id];
@@ -174,6 +233,7 @@ function renderHome() {
         <div class="row"><span class="note">${st?.done ? "Completed" : st ? `On layer ${reached(s) + 1} of ${s.layers.length}` : `${s.layers.length} layers`}</span>
         <a class="btn ${st && !st.done ? "primary" : ""}" href="/s/${s.id}" data-nav="${s.id}">${st?.done ? "Review" : st ? "Continue" : "Start"}</a></div></div>`;
     }).join("")}</div>`;
+  bindExplore("home");
 }
 
 // ---------------------------------------------------------------- guided session
@@ -373,7 +433,7 @@ function fillAds() {
       const me = await api("/api/me");
       auth.remaining = me.remaining; writeLS("ga-auth", auth);
       const p = await api("/api/progress");
-      mergeProgress(p.data?.sessions || {});
+      mergeProgress(p.data);
       writeLS("ga-state", state);
       renderAll(false);
     } catch {}

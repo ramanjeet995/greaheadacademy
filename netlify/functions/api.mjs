@@ -31,6 +31,11 @@ async function route(req, context, url) {
   const p = url.pathname, method = req.method;
   if (p === "/api/config" && method === "GET") return json({ freeDaily: limit(env("FREE_DAILY_REPLIES"), 5) });
   if (p === "/api/login" && method === "POST") return login(req, context);
+  const topicMatch = p.match(/^\/api\/topic\/(x-[a-z0-9-]+)$/);
+  if (topicMatch && method === "GET") {
+    const system = await store("topics").get(topicMatch[1], { type: "json" });
+    return system ? json({ system }) : json({ error: "not_found" }, 404);
+  }
 
   const user = await authUser(req);
   if (!user) return json({ error: "auth", message: "Sign in again." }, 401);
@@ -52,7 +57,104 @@ async function route(req, context, url) {
     return json({ ok: true });
   }
   if (p === "/api/mentor" && method === "POST") return mentor(req, context, user);
+  if (p === "/api/generate" && method === "POST") return generate(req, context, user);
   return json({ error: "not_found" }, 404);
+}
+
+// Built-in systems, or topics learners have generated (stored in Blobs — the server's own copy).
+async function getSystem(id) {
+  if (BY_ID[id]) return BY_ID[id];
+  if (typeof id === "string" && /^x-[a-z0-9-]+$/.test(id)) return store("topics").get(id, { type: "json" });
+  return null;
+}
+
+// ---- explore any topic: Claude writes a new 5-layer lesson. Each topic is written once and cached,
+// so a second learner asking for the same machine costs nothing.
+const TOPIC_RE = /^[\p{L}\p{N} '’&(),./+-]{3,60}$/u;
+const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
+
+async function generate(req, context, user) {
+  const body = await req.json().catch(() => ({}));
+  const topic = String(body.topic || "").trim().replace(/\s+/g, " ");
+  const field = FIELD_NAME[body.field] ? body.field : "mechanical";
+  if (!TOPIC_RE.test(topic)) return json({ error: "bad_topic", message: "Type a machine or system name (3–60 characters)." }, 400);
+  const slug = slugify(topic);
+  if (!slug) return json({ error: "bad_topic", message: "Type a machine or system name." }, 400);
+
+  // Already exists? Built-in first (matched by id or title), then cached topics.
+  const builtin = SYSTEMS.find((s) => s.id === slug || slugify(s.title) === slug);
+  if (builtin) return json({ system: builtin, existing: true });
+  const id = `x-${slug}`;
+  const topics = store("topics");
+  const cached = await topics.get(id, { type: "json" });
+  if (cached) return json({ system: cached, existing: true });
+
+  const d = day();
+  const keys = [
+    [`${d}/gen/${user.username}`, limit(env("GEN_DAILY"), 2), "user"],
+    [`${d}/genip/${clientIp(req, context)}`, limit(env("GEN_IP_DAILY"), 4), "ip"],
+    [`${d}/genglobal`, limit(env("GEN_GLOBAL_DAILY"), 200), "global"],
+  ];
+  const counted = [];
+  for (const [k, max, scope] of keys) {
+    const n = await bump(k);
+    counted.push(k);
+    if (n > max) {
+      await Promise.all(counted.map(unbump));
+      return json({ error: "quota", scope, message: scope === "user" ? "You've explored today's new topics. Try again tomorrow, or pick one of the systems." : "New topics are at capacity today. Try again tomorrow." }, 429);
+    }
+  }
+
+  const prompt = `Write a short guided-discovery lesson for ${FIELD_NAME[field].toLowerCase()} engineering learners on: "${topic}".
+
+First decide if it fits. It must be a real physical machine, mechanism or engineered system. If it isn't (e.g. a person, an abstract idea, software only), or if teaching it would mean detailing how to make weapons, explosives or devices meant to harm people, reply with only: {"error":"not_supported"}
+
+Otherwise the lesson is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and move, why designs are chosen, what goes wrong, and how the design evolved from older to modern solutions. Use real engineering history and real component names; if unsure of a date, give an approximate era. Be concise.
+
+Exactly 5 layers:
+1 Student — the basic layout: parts and how they connect (no "ask").
+2 Junior — the core mechanism: which one, how it moves, alternatives.
+3 Mid-level — refinement: geometry, feel, wear, what goes wrong.
+4 Senior — assistance and safety in the real world.
+5 Modern — what engineers build today.
+Layers 2–5 open with "ask": a concrete scenario (max 35 words) exposing the previous layer's limit and asking how they'd solve it.
+"real": how real designs do it, max 45 words.
+
+Reply with only JSON:
+{"title":"short name","era":"e.g. 1900s → today","prompt":"starting question, max 50 words: a concrete situation, then ask how they'd make it work — parts, connections, movement","hints":["hint 1","hint 2"],"layers":[{"name":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
+
+  try {
+    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const response = await client.messages.create({
+      model: env("GEN_MODEL") || env("MODEL") || "claude-haiku-4-5",
+      max_tokens: 1800,
+      messages: [{ role: "user", content: prompt }],
+    });
+    if (response.stop_reason === "refusal") {
+      await Promise.all(counted.map(unbump));
+      return json({ error: "not_supported", message: "That topic isn't one we can write a lesson on. Try a machine or mechanism." }, 422);
+    }
+    const out = parseJson(response.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+    if (out?.error) {
+      await Promise.all(counted.map(unbump));
+      return json({ error: "not_supported", message: "That doesn't look like a machine or mechanism we can teach. Try something like \"bicycle gears\" or \"car starter motor\"." }, 422);
+    }
+    const s = (v, n) => String(v || "").slice(0, n);
+    const layers = Array.isArray(out?.layers) ? out.layers.slice(0, 5).map((l, i) => ({ name: s(l?.name, 80), ...(i ? { ask: s(l?.ask, 400) } : {}), real: s(l?.real, 600) })) : [];
+    if (!out?.title || !out?.prompt || layers.length !== 5 || layers.some((l, i) => !l.name || !l.real || (i && !l.ask))) throw new Error("bad_json");
+    const system = {
+      id, field, custom: true, topic,
+      title: s(out.title, 60), era: s(out.era, 40), prompt: s(out.prompt, 500),
+      hints: (Array.isArray(out.hints) ? out.hints : []).slice(0, 2).map((h) => s(h, 300)),
+      layers, created: Date.now(),
+    };
+    await topics.setJSON(id, system);
+    return json({ system });
+  } catch (e) {
+    console.error("generate failed", e?.message || e);
+    await Promise.all(counted.map(unbump));
+    return json({ error: "generate_failed", message: "Couldn't write that lesson. Try again." }, 502);
+  }
 }
 
 // ---- accounts: open username + PIN. The PIN is hashed with a server-side pepper;
@@ -116,7 +218,7 @@ ${sys.layers.map((l, i) => `Layer ${i + 1} (${LEVELS[i]}) — ${l.name}${i ? ` |
 
 async function mentor(req, context, user) {
   const body = await req.json().catch(() => ({}));
-  const sys = BY_ID[body.systemId];
+  const sys = await getSystem(body.systemId);
   const kind = body.kind === "hint" ? "hint" : "answer";
   const layer = Number.isInteger(body.layer) ? body.layer : -1;
   const turns = Number.isInteger(body.turns) ? Math.max(0, body.turns) : 0;
