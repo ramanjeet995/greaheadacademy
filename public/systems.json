@@ -1,0 +1,372 @@
+[
+ {
+  "id": "steering",
+  "field": "mechanical",
+  "title": "Steering system",
+  "era": "1900s → today",
+  "prompt": "A car's front wheels must turn left and right when the driver turns a steering wheel inside the cabin. How would you make that happen? Describe the parts, how they connect, and how the motion travels from the driver's hands to the wheels.",
+  "hints": [
+   "Each front wheel needs a pivot. How could you get leverage to rotate the wheel about it?",
+   "Both wheels must turn together. What could connect them?"
+  ],
+  "layers": [
+   {
+    "name": "The basic layout",
+    "real": "Each front wheel is mounted on a steering knuckle that pivots on a kingpin (or upper and lower ball joints). A steering arm sticks out from the knuckle, offset from the pivot, so pushing or pulling it rotates the wheel. A tie rod joins the two arms so both wheels turn together, and a steering gear turns the rotation of the steering wheel and column into that push-pull motion."
+   },
+   {
+    "name": "Rotation to push-pull",
+    "ask": "What exactly sits between the steering column and the tie rods? Name the mechanism, walk through how it moves, and say why you'd pick it over the alternatives.",
+    "real": "Early and heavy vehicles use a steering box: worm-and-sector, later recirculating-ball, where a nut riding on steel balls travels along a worm and swings a pitman arm that drives a drag link and the tie rods. Most cars now use rack and pinion: a pinion on the end of the column meshes with a toothed rack sliding in a tube, and the tie rods attach to the rack ends through ball joints. Fewer joints, more direct feel, lighter."
+   },
+   {
+    "name": "Geometry and feel",
+    "ask": "In a turn, the inner and outer wheels follow different circles. What does that mean for your linkage? And why does the steering wheel return to straight when the driver lets go?",
+    "real": "The inner wheel follows a tighter circle, so it must turn more than the outer one — Ackermann geometry, achieved by angling the steering arms inward so the linkage forms a trapezoid rather than a rectangle. Caster — the pivot axis tilted back so the tyre trails behind it, like a shopping-trolley wheel — makes the wheels self-centre. Ball joints and matched tie-rod geometry let the suspension move without steering the car by itself (bump steer)."
+   },
+   {
+    "name": "Power assistance",
+    "ask": "A heavy car with wide tyres is parking and the driver can barely turn the wheel. How do you help them — without losing the feel of the road?",
+    "real": "Hydraulic power steering adds an engine-driven pump and a rotary valve: a small torsion bar in the column twists with the driver's effort and opens the valve, so oil pressure pushes a piston on the rack in the same direction. The driver still feels the road through the torsion bar. Electric power steering replaces the pump with a torque sensor and an electric motor on the column or rack — it uses energy only when steering and lets software add lane-keeping and park assist."
+   },
+   {
+    "name": "Steer-by-wire",
+    "ask": "Now remove the steering column entirely — no mechanical link between the wheel and the rack. What must the system have to stay safe, and still feel like steering?",
+    "real": "Sensors read the steering wheel, motors move the rack, and a separate motor on the steering wheel recreates road feel. With no mechanical backup, it needs redundancy — duplicated sensors, motors, controllers and power supplies — and software that keeps working after a single fault. It frees up packaging and allows variable steering ratios and rear-wheel steering."
+   }
+  ]
+ },
+ {
+  "id": "brakes",
+  "field": "mechanical",
+  "title": "Car brakes",
+  "era": "1900s → today",
+  "prompt": "A car moving at speed must slow down and stop when the driver presses a pedal. How would you do it? Describe what parts you'd use, where they go, and how one foot controls all four wheels.",
+  "hints": [
+   "When a car stops, where does all its motion energy go?",
+   "How could one pedal push on four wheels at once?"
+  ],
+  "layers": [
+   {
+    "name": "The basic idea",
+    "real": "Brakes turn motion into heat through friction: a stationary part (a shoe or pad) is pressed against a part that spins with the wheel (a drum or disc). The pedal is a lever that multiplies the driver's push, and some transmission carries that push to each wheel."
+   },
+   {
+    "name": "Reaching every wheel",
+    "ask": "One pedal, four wheels, and a moving suspension in between. How do you carry the driver's push to every wheel so they all brake evenly?",
+    "real": "Early cars used rods and cables, which stretch, need constant adjustment and brake unevenly. Hydraulic brakes replaced them: the pedal pushes a piston in a master cylinder, brake fluid carries the same pressure through pipes and flexible hoses to every wheel, and pistons there push the pads or shoes. Pressure is equal everywhere, so the braking balances itself."
+   },
+   {
+    "name": "Drum or disc",
+    "ask": "On a long mountain descent, your brakes get weaker and weaker. What's happening at the wheel, and how would you design the brake itself to cope?",
+    "real": "Drum brakes push shoes outward against the inside of a drum; the leading shoe is dragged into the drum, which adds braking force (self-energising) — cheap and good for parking brakes, but heat is trapped, so they fade when hot and grab when wet. Disc brakes clamp pads onto an open rotor with a caliper; they shed heat, recover from water quickly and give a steady feel, so they're used at the front, where most braking happens — often with vented discs."
+   },
+   {
+    "name": "Boost and fail-safety",
+    "ask": "A brake pipe bursts. With your current design, what happens — and how do you make sure the car can still stop?",
+    "real": "A booster (vacuum, hydraulic or electric) multiplies the driver's pedal force. The hydraulics are split into two independent circuits — often diagonally — so one leak still leaves half the braking. Valves or electronics limit rear pressure, because weight shifts forward under braking and the rear wheels would lock first."
+   },
+   {
+    "name": "Electronic control",
+    "ask": "In an emergency stop on a wet road, the wheels lock and the car slides straight on even though the driver is steering. How do you prevent that?",
+    "real": "ABS senses each wheel's speed; when one starts to lock, a hydraulic unit rapidly releases and reapplies its pressure so the tyre keeps gripping and the driver can still steer. The same hardware provides traction control and stability control, braking individual wheels to correct a skid. Electric cars blend regenerative braking — the motor acting as a generator — with friction brakes, increasingly through brake-by-wire."
+   }
+  ]
+ },
+ {
+  "id": "gearbox",
+  "field": "mechanical",
+  "title": "Gearbox",
+  "era": "1890s → today",
+  "prompt": "An engine only works well within a certain speed range, but a car needs strong pull to start from rest and high speed on the motorway. How would you connect the engine to the wheels so both are possible? Describe the parts and how the driver switches between them.",
+  "hints": [
+   "Think about the gears on a bicycle.",
+   "How would you briefly stop the engine driving the wheels?"
+  ],
+  "layers": [
+   {
+    "name": "Gear pairs and a clutch",
+    "real": "Pairs of gears of different sizes give different ratios: a small gear driving a big one gives strong turning force at low speed (first gear); similar sizes give speed. A clutch — a friction plate clamped between the engine's flywheel and a pressure plate — lets the driver disconnect the engine to start off smoothly and to change gear."
+   },
+   {
+    "name": "Selecting a gear",
+    "ask": "How does the driver actually select a gear? Walk through what moves inside the box when they move the lever — and what stops the teeth grinding.",
+    "real": "Early 'crash' gearboxes slid whole gears along a shaft into mesh — teeth clashed unless the driver matched speeds by double-declutching. Constant-mesh gearboxes keep every gear pair meshed and spinning freely on the shaft; a sliding dog clutch locks the chosen gear to the shaft, so gear teeth never slide into each other."
+   },
+   {
+    "name": "Synchromesh",
+    "ask": "Drivers keep crunching gears when they shift quickly. What could you add so the gear and shaft are turning at the same speed before they lock together?",
+    "real": "Before the dog teeth engage, a synchroniser ring — a small cone clutch — rubs on a cone on the gear and brings it to the shaft's speed. A blocking feature stops the sleeve sliding across until speeds match, so shifts are quiet without special technique."
+   },
+   {
+    "name": "Automatic",
+    "ask": "Now the driver shouldn't use a clutch or choose gears at all. How would the car pull away from rest and change ratio by itself?",
+    "real": "Classic automatics connect the engine through a fluid torque converter — a pump, turbine and stator in oil — instead of a clutch, so the car can sit still in gear. Planetary gearsets give several ratios in a compact unit; hydraulically (later electronically) controlled clutches and bands hold different parts of the gearsets to select each ratio."
+   },
+   {
+    "name": "Dual-clutch, CVT and EVs",
+    "ask": "Drivers want instant, seamless shifts with no loss of pull — or no shifts at all. How would you design that?",
+    "real": "A dual-clutch gearbox has two shafts — odd and even gears — each with its own clutch; the next gear is preselected and the shift is a fast handover between clutches. A CVT uses a belt or chain between two pulleys whose width changes, giving endless ratios. Electric motors pull strongly over a wide speed range, so most EVs use a single fixed reduction."
+   }
+  ]
+ },
+ {
+  "id": "differential",
+  "field": "mechanical",
+  "title": "Differential",
+  "era": "1820s → today",
+  "prompt": "In a turn, a car's outer driven wheel travels farther than the inner one. If both are fixed to one solid axle, the tyres scrub and the car fights the turn. How would you drive both wheels from the engine and still let them turn at different speeds? Describe the mechanism.",
+  "hints": [
+   "What if the gear the engine drives could also let the two wheels share the motion unequally?",
+   "Picture gears that can spin on their own shafts and be carried around at the same time."
+  ],
+  "layers": [
+   {
+    "name": "Why it's needed",
+    "real": "A solid axle forces both wheels to the same speed, so in a turn one tyre must slip. The solution has to drive both wheels yet let them rotate at different speeds — a differential."
+   },
+   {
+    "name": "The open differential",
+    "ask": "Describe the gear arrangement that lets both wheels be driven yet turn at different speeds. What turns what?",
+    "real": "The driveshaft's pinion turns a large ring gear bolted to a carrier. Inside the carrier, small spider gears sit between two side gears, each connected to one wheel's axle. Driving straight, the spider gears don't spin and everything turns as one; in a turn, the spider gears rotate on their shafts, letting one side speed up while the other slows."
+   },
+   {
+    "name": "When one wheel slips",
+    "ask": "One drive wheel is on ice and just spins while the car stays put. Why does your differential do that, and how do you fix it without spoiling normal turning?",
+    "real": "An open differential always sends equal torque to both sides, so if one wheel has no grip, the other gets almost nothing. Limited-slip differentials resist the speed difference — with clutch packs, gear-based designs (Torsen) or viscous couplings — and lockers can lock both sides together for off-road driving."
+   },
+   {
+    "name": "All-wheel drive",
+    "ask": "Now drive all four wheels. What new speed difference appears, and how do you handle it on dry tarmac versus in mud?",
+    "real": "Front and rear axles also travel different distances in a turn. A centre differential, viscous coupling or electronically controlled clutch splits the drive between axles; part-time 4×4s use a transfer case that locks the axles together only on loose surfaces, where slip is harmless."
+   },
+   {
+    "name": "Torque vectoring",
+    "ask": "Instead of just letting wheels turn at different speeds, could you use the drive itself to help the car turn? How?",
+    "real": "Modern systems send more drive to the outer wheel to help rotate the car into the turn — using clutch packs on each output, gently braking the inner wheel, or a separate electric motor per wheel in EVs — all controlled by software reading steering, yaw and wheel-speed sensors."
+   }
+  ]
+ },
+ {
+  "id": "tank",
+  "field": "mechanical",
+  "title": "Military tank",
+  "era": "1916 → today",
+  "prompt": "It's 1916. Armies are stuck in trenches, barbed wire and deep mud, and wheeled armoured cars bog down. Describe a vehicle that could cross trenches and mud while protecting its crew. What would carry it, and what shape would it be?",
+  "hints": [
+   "Wheels sink because all the weight sits on small patches. What spreads it out?",
+   "What stops a vehicle dropping nose-first into a trench?"
+  ],
+  "layers": [
+   {
+    "name": "Crossing the trench",
+    "real": "Continuous tracks — borrowed from farm crawler tractors — lay their own road and spread the weight over a long, wide area, so the vehicle stays on top of mud. A long hull, with tracks running right round a rhomboid shape and a high front, lets it bridge trenches and climb over parapets. Thin steel plate stopped rifle and machine-gun bullets."
+   },
+   {
+    "name": "Steering on tracks",
+    "ask": "Tracks can't pivot like car wheels. How does your vehicle turn, and how does one driver control it?",
+    "real": "A tracked vehicle turns by running one track faster than the other (skid steering). The first tanks needed several crewmen working gears and brakes; clutch-and-brake systems let one driver slow one track; later geared steering differentials varied the two track speeds smoothly without wasting power."
+   },
+   {
+    "name": "Suspension and speed",
+    "ask": "Your tank shakes the crew so badly above walking pace that nobody can aim or drive properly. How do you let it cross rough ground fast?",
+    "real": "Early tanks were barely sprung. Leaf-spring bogies gave little wheel travel; the Christie system used large road wheels on long coil springs for speed; torsion bars running across the hull floor became the standard — compact, independent, long travel — with shock absorbers on the end wheels to stop pitching."
+   },
+   {
+    "name": "Firing on the move",
+    "ask": "The tank bounces over rough ground and the gun swings all over the place. How do you keep it pointed at the target while moving?",
+    "real": "Early tanks had to stop to fire. Gyro-stabilisers sense the gun's motion in space and drive it the opposite way — first in elevation only, later in both elevation and traverse. Modern tanks stabilise the gunner's sight separately and let the heavy gun follow it; the fire-control system fires only when gun and sight line up."
+   },
+   {
+    "name": "Modern protection",
+    "ask": "New weapons go through far more steel than the tank can carry. How do you protect the crew without making it too heavy to move?",
+    "real": "Sloped armour deflects rounds; spaced armour and side skirts disrupt shaped-charge warheads; composite armour (ceramic and other layers) and explosive reactive armour defeat them more efficiently per tonne; active protection systems detect and intercept incoming missiles. Ammunition is isolated behind blow-out panels so a hit there doesn't kill the crew."
+   }
+  ]
+ },
+ {
+  "id": "elevator",
+  "field": "electromechanical",
+  "title": "Elevator",
+  "era": "1850s → today",
+  "prompt": "It's the 1850s. Platforms that lift goods and people hang from a single rope. If the rope breaks, everyone falls — so nobody will ride. How would you lift the platform, and make it safe even if the rope breaks, with no power and no operator?",
+  "hints": [
+   "What changes the instant a rope breaks? Could that change itself trigger a safety device?",
+   "What runs the full height of the shaft that the platform could grab onto?"
+  ],
+  "layers": [
+   {
+    "name": "The safety brake",
+    "real": "Guide rails run up the shaft. The rope's tension holds a spring loaded; if the rope breaks, the spring throws out pawls that catch ratchet teeth on the rails (Otis, 1853). The failure itself triggers the brake — no power or operator needed."
+   },
+   {
+    "name": "Traction and counterweight",
+    "ask": "The building is getting taller and a rope drum would be enormous. How else could a motor move the car — and how could you make the motor's job easier?",
+    "real": "A traction machine passes the ropes over a grooved sheave with a counterweight on the other side. Friction in the grooves drives the car, and the counterweight balances the car plus part of its load, so the motor only has to move the difference."
+   },
+   {
+    "name": "Overspeed and doors",
+    "ask": "The rope is fine, but the machine's brake fails and the car runs away downward — your rope-tension brake never fires. How do you stop it? And what else could hurt someone?",
+    "real": "Modern safety gear triggers on speed, not rope tension: an overspeed governor — a spinning flyweight device driven by a rope attached to the car — trips wedge clamps that grip the rails progressively for a controlled stop. Door interlocks make sure the car can't move unless every landing door is locked shut."
+   },
+   {
+    "name": "Smooth, level stops",
+    "ask": "Passengers complain the car jerks and stops a few centimetres above or below the floor. How do you get smooth, exact stops?",
+    "real": "Early two-speed motors stopped by dropping the brake, so the car stopped short or long depending on its load. Closed-loop drives — Ward-Leonard motor-generator sets, then variable-frequency inverters with an encoder — follow a smooth speed profile right down to zero at the floor; the brake only holds the car."
+   },
+   {
+    "name": "Moving a skyscraper",
+    "ask": "A 60-floor tower has a crush of people every morning, and more shafts would eat the floor space. How do you move everyone quickly?",
+    "real": "Tall buildings use zones and sky lobbies with express shuttles, double-deck cars, and destination dispatch — passengers enter their floor first so the system groups people going to nearby floors. Gearless permanent-magnet machines, regenerative drives and carbon-fibre ropes make taller, more efficient systems possible."
+   }
+  ]
+ },
+ {
+  "id": "window",
+  "field": "electromechanical",
+  "title": "Car power window",
+  "era": "1940s → today",
+  "prompt": "A car door holds a sheet of glass that must move up and down inside the door. How would you move it — first with a hand crank, then how would you make it electric?",
+  "hints": [
+   "The glass has to stay upright and slide evenly. What could lift it?",
+   "A crank turns, but the glass moves in a straight line. What converts one into the other?"
+  ],
+  "layers": [
+   {
+    "name": "The window regulator",
+    "real": "The glass slides in rubber-lined channels. A regulator lifts it: either a scissor linkage driven by a toothed quadrant gear, or a cable wound on a drum that pulls a carrier clamped to the glass. The crank turns a small pinion that drives the quadrant or drum."
+   },
+   {
+    "name": "Making it electric",
+    "ask": "Replace the hand crank with a motor. What kind of motor and gearing would you use — and what stops a thief pushing the glass down from outside?",
+    "real": "A small DC motor drives the regulator through a worm gear. The worm gives a big speed reduction in a small space and is self-locking — pushing on the glass can't turn the worm backwards, so the window can't be forced down."
+   },
+   {
+    "name": "Direction and end stops",
+    "ask": "How does your switch make the motor go both up and down, and how does the system know when the window is fully closed?",
+    "real": "Reversing the motor's polarity reverses direction — through switch contacts or relays arranged as an H-bridge. At the end of travel the motor stalls; simple systems rely on a thermal cut-out, better ones detect the stall current or count motor pulses and cut the power."
+   },
+   {
+    "name": "Anti-pinch",
+    "ask": "With one-touch auto-close, how do you make sure the window can never trap a child's hand?",
+    "real": "The controller tracks motor speed with Hall sensors or current ripple; if the motor slows unexpectedly while closing, it stops and reverses. It learns the normal effort profile — which changes with cold, ice and worn seals — so it doesn't trigger falsely."
+   },
+   {
+    "name": "The door module",
+    "ask": "The car maker wants windows that close from the key fob, and doors with no window frame. What changes in your system?",
+    "real": "A door control module on the car's network (LIN/CAN) runs windows, mirrors and locks, allowing remote and rain-triggered closing. Frameless-door cars drop the glass a few millimetres when the door opens, then raise it into the seal once it's shut."
+   }
+  ]
+ },
+ {
+  "id": "autodoor",
+  "field": "electromechanical",
+  "title": "Automatic sliding door",
+  "era": "1950s → today",
+  "prompt": "A shop wants glass doors that open by themselves when someone walks up, and close afterwards. How would you build it? Describe how it senses people, what moves the doors, and how the parts work together.",
+  "hints": [
+   "What could tell the door that someone is approaching?",
+   "What would carry a heavy glass panel sideways smoothly?"
+  ],
+  "layers": [
+   {
+    "name": "Sense and move",
+    "real": "A sensor detects someone approaching — early doors used pressure mats, today microwave or infrared motion sensors. A controller starts a motor that moves the door panel, which hangs from rollers on an overhead track; after a delay it closes."
+   },
+   {
+    "name": "The drive",
+    "ask": "What exactly moves the heavy glass panel sideways? And how could one motor open two panels in opposite directions?",
+    "real": "A motor with a gearbox drives a toothed belt loop along the header; each panel's carriage clamps to the belt. For a pair, one panel clamps to the top run of the belt and the other to the bottom run, so they move apart and together."
+   },
+   {
+    "name": "Safety",
+    "ask": "Someone stops in the doorway to check their phone, and the door closes on them. Why did your sensor miss them, and how do you fix it?",
+    "real": "Motion sensors only see movement — a person standing still is invisible to them. Presence sensors (infrared curtains or beams across the threshold) hold the door open. The controller also limits closing force and speed, and reverses if the door meets an obstruction, detected from motor current or speed."
+   },
+   {
+    "name": "When the power fails",
+    "ask": "There's a fire and the power goes out. What must the door do, and how does it do it with no mains power?",
+    "real": "Escape routes must open without power: the panels have break-out hinges so they swing outward when pushed, or a battery backup opens them and holds them open. Depending on regulations, some doors instead close by spring or gravity to keep heat in or secure the building."
+   },
+   {
+    "name": "Smart doors",
+    "ask": "The owner wants doors that save heating energy, lock at night, and report faults before they fail. How would you design the control?",
+    "real": "Controllers learn the door's weight and friction when installed and adapt their speed profiles; self-diagnostics report wear; doors link to access control, night locking and building management; energy-saving modes open only part-way for one person."
+   }
+  ]
+ },
+ {
+  "id": "washer",
+  "field": "electromechanical",
+  "title": "Washing machine",
+  "era": "1900s → today",
+  "prompt": "Design a machine that washes clothes: gets them wet, moves them through soapy water, rinses them, and removes most of the water afterwards. Describe the main parts and how they move.",
+  "hints": [
+   "How do people wash clothes by hand? What motion could a machine copy?",
+   "How could you get water out without squeezing the clothes?"
+  ],
+  "layers": [
+   {
+    "name": "The washing motion",
+    "real": "Clothes need mechanical action in soapy water. Top-loaders use an agitator that twists back and forth; front-loaders tumble the clothes in a perforated drum turning on a horizontal axis, lifting and dropping them. An electric motor drives the drum through a belt and pulley."
+   },
+   {
+    "name": "Spinning the water out",
+    "ask": "Washing needs a slow tumble, but getting the water out needs a very fast spin. How would you do both — and how does spinning remove water?",
+    "real": "Spinning the drum fast flings water out through the holes. Because washing is slow and spinning is fast, older machines used two-speed motors or gearboxes; later, universal motors with electronic speed control covered the whole range."
+   },
+   {
+    "name": "Unbalanced loads",
+    "ask": "A heavy towel clumps on one side and the machine starts walking across the floor during the spin. What's happening, and how do you design against it?",
+    "real": "The drum and tub hang on springs with dampers and carry heavy concrete counterweights to calm the shaking. Before spinning, the controller tumbles slowly to spread the load, and it lowers the spin speed if the drum is still out of balance."
+   },
+   {
+    "name": "Control and safety",
+    "ask": "What tells the machine when to fill, heat, drain and spin — and how do you make sure the door can't open while the drum is spinning full of water?",
+    "real": "Early machines used an electromechanical timer — a motor-driven cam that switched the valves, heater and motor in sequence. Microcontrollers replaced it, reading a pressure switch for water level and a thermistor for temperature, and an electric door interlock stays locked until the drum has stopped and drained."
+   },
+   {
+    "name": "Direct drive",
+    "ask": "Make it quieter, more efficient and smarter about how much it's washing. What would you change in the drive and the controls?",
+    "real": "Modern machines mount a brushless motor directly on the drum shaft — no belt — driven by an inverter. The controller senses load size and imbalance from the motor itself, doses water and detergent accordingly, and adjusts the spin, making the machine quieter and more efficient."
+   }
+  ]
+ },
+ {
+  "id": "robotjoint",
+  "field": "electromechanical",
+  "title": "Robot arm joint",
+  "era": "1960s → today",
+  "prompt": "A robot arm has to rotate its elbow joint to precise positions, hold a load there, and move smoothly. What would you put inside the joint, and how does the controller know where it is?",
+  "hints": [
+   "Electric motors spin fast but with little force. What changes that?",
+   "How could the robot know what angle the joint is at?"
+  ],
+  "layers": [
+   {
+    "name": "Motor and gearing",
+    "real": "An electric motor turns the joint through a gear reduction, trading the motor's high speed for the strong turning force needed to move the arm. A controller drives the motor to move the joint to the commanded position."
+   },
+   {
+    "name": "Knowing where it is",
+    "ask": "How does your controller know the joint's actual position — and what happens when you switch the robot on in the morning?",
+    "real": "The controller needs feedback. Hobby servos use a potentiometer on the output; industrial joints use encoders — optical or magnetic discs that produce pulses as the shaft turns. Incremental encoders need a homing move at start-up; absolute encoders know the position immediately, even after power-off."
+   },
+   {
+    "name": "Gearing without play",
+    "ask": "The arm wobbles slightly when it reverses direction and can't hold precise positions. What's wrong in your gearing, and what would you use instead?",
+    "real": "Ordinary spur gears have backlash — play between the teeth — so the arm wobbles and loses accuracy. Planetary gearboxes are compact and strong; harmonic (strain-wave) drives flex a thin toothed ring with an oval cam for very high reduction with almost no backlash; cycloidal drives shrug off shocks."
+   },
+   {
+    "name": "Holding and safety",
+    "ask": "The power cuts out while the arm is holding a heavy part. What happens with your design, and how do you make it safe?",
+    "real": "Each joint has a spring-applied brake that's held off electrically — it clamps automatically when power is lost. The drive watches motor current and position error to detect collisions and stop, and safety-rated controllers enforce speed and zone limits."
+   },
+   {
+    "name": "Collaborative robots",
+    "ask": "Now the robot works right next to people with no fence. How does it avoid hurting someone — and could they teach it by moving it by hand?",
+    "real": "Cobots put torque sensors in each joint (or estimate torque from the motors), so they feel contact and stop gently, can be guided by hand to teach them a task, and can control force for jobs like polishing or assembly."
+   }
+  ]
+ }
+]

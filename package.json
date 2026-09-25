@@ -1,0 +1,17 @@
+{
+  "name": "gearhead-academy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "dev": "netlify dev",
+    "deploy": "netlify deploy --build --prod"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "@netlify/blobs": "latest"
+  },
+  "devDependencies": {
+    "netlify-cli": "latest"
+  }
+}
