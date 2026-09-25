@@ -27,13 +27,13 @@ const lvl = (i) => LEVELS[Math.min(i, LEVELS.length - 1)];
 // ---------------------------------------------------------------- local state (per browser)
 function readLS(k, dflt) { try { return JSON.parse(localStorage.getItem(k)) ?? dflt; } catch { return dflt; } }
 function writeLS(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-const state = Object.assign({ field: "mechanical", sessions: {}, aiOn: true }, readLS("pb-state", {}));
-let auth = readLS("pb-auth", null); // {token, username, remaining}
+const state = Object.assign({ field: "mechanical", sessions: {}, aiOn: true }, readLS("ga-state", {}));
+let auth = readLS("ga-auth", null); // {token, username, remaining}
 let freeDaily = 5;
 
 let syncTimer;
 function save() {
-  writeLS("pb-state", state);
+  writeLS("ga-state", state);
   if (!auth) return;
   clearTimeout(syncTimer);
   syncTimer = setTimeout(pushProgress, 1500);
@@ -50,7 +50,7 @@ async function api(path, opts = {}) {
   const res = await fetch(path, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && auth && path !== "/api/login") {
-    auth = null; writeLS("pb-auth", null); renderAccount();
+    auth = null; writeLS("ga-auth", null); renderAccount();
   }
   if (!res.ok) throw Object.assign(new Error(data.message || "Request failed"), { status: res.status, data });
   return data;
@@ -103,7 +103,7 @@ function renderAccount() {
       <div class="note">AI replies left today: <b>${auth.remaining ?? "–"}</b> of ${freeDaily}. Without the AI mentor you still get the real-world answer after each layer.</div>
       <button class="link" id="logoutBtn" style="justify-self:start">Sign out</button>`;
     $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); };
-    $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("pb-auth", null); renderAccount(); };
+    $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAccount(); };
   } else {
     box.innerHTML = `<form id="loginForm">
       <div class="note"><b>Save your progress</b> and unlock ${freeDaily} AI mentor replies a day. Pick any username and a PIN — new usernames are created automatically.</div>
@@ -120,7 +120,7 @@ async function login() {
   try {
     const r = await api("/api/login", { method: "POST", body: JSON.stringify({ username: $("uName").value, pin: $("uPin").value }) });
     auth = { token: r.token, username: r.username, remaining: r.remaining };
-    writeLS("pb-auth", auth);
+    writeLS("ga-auth", auth);
     const p = await api("/api/progress");
     mergeProgress(p.data?.sessions || {});
     save(); await pushProgress();
@@ -236,7 +236,7 @@ function renderSession(sys) {
   if (s.done) return;
   const ta = $("answer");
   ta.value = s.draft || "";
-  let tm; ta.oninput = () => { s.draft = ta.value; clearTimeout(tm); tm = setTimeout(() => writeLS("pb-state", state), 400); };
+  let tm; ta.oninput = () => { s.draft = ta.value; clearTimeout(tm); tm = setTimeout(() => writeLS("ga-state", state), 400); };
   $("submitBtn").onclick = () => submit(sys);
   $("hintBtn").onclick = () => hint(sys);
   $("revealBtn").onclick = () => reveal(sys);
@@ -285,7 +285,7 @@ async function submit(sys) {
   setBusy(true, "Comparing your method with real designs");
   try {
     const r = await api("/api/mentor", { method: "POST", body: JSON.stringify({ systemId: sys.id, kind: "answer", layer: s.layer, turns: s.turns, conversation: convo, answer: text }) });
-    auth.remaining = r.remaining; writeLS("pb-auth", auth);
+    auth.remaining = r.remaining; writeLS("ga-auth", auth);
     const last = s.layer === sys.layers.length - 1;
     let action = r.result.action;
     if (action === "finish" && !last) action = "advance";
@@ -298,7 +298,7 @@ async function submit(sys) {
     if (action === "finish") { s.done = true; push(sys, { type: "final" }); }
   } catch (e) {
     if (e.status === 429 && e.data?.error === "quota") {
-      if (e.data.scope === "user") { auth.remaining = 0; writeLS("pb-auth", auth); }
+      if (e.data.scope === "user") { auth.remaining = 0; writeLS("ga-auth", auth); }
       push(sys, { type: "note", text: `${e.data.message} Continuing with the built-in path — here's how real designs do it.` });
       push(sys, { type: "real", layer: s.layer }); nextLayer(sys);
     } else {
@@ -319,10 +319,10 @@ async function hint(sys) {
   setBusy(true, "Thinking of a nudge");
   try {
     const r = await api("/api/mentor", { method: "POST", body: JSON.stringify({ systemId: sys.id, kind: "hint", layer: s.layer, turns: s.turns, conversation: conversation(sys) }) });
-    auth.remaining = r.remaining; writeLS("pb-auth", auth);
+    auth.remaining = r.remaining; writeLS("ga-auth", auth);
     push(sys, { type: "hint", text: r.hint });
   } catch (e) {
-    if (e.status === 429 && e.data?.scope === "user") { auth.remaining = 0; writeLS("pb-auth", auth); }
+    if (e.status === 429 && e.data?.scope === "user") { auth.remaining = 0; writeLS("ga-auth", auth); }
     push(sys, { type: "note", text: e.data?.message || "The hint didn't come through. Try again." });
   } finally { setBusy(false); refresh(sys); }
 }
@@ -344,7 +344,7 @@ function reveal(sys) {
 
 // ---------------------------------------------------------------- ads (only when configured by the server)
 function fillAds() {
-  const cfg = window.PB_ADS || {};
+  const cfg = window.GA_ADS || {};
   if (!cfg.client) return;
   for (const [slotName, elId] of [["top", "ad-top"], ["side", "ad-side"], ["bottom", "ad-bottom"]]) {
     const slot = cfg.slots?.[slotName];
@@ -371,10 +371,10 @@ function fillAds() {
   if (auth) {
     try {
       const me = await api("/api/me");
-      auth.remaining = me.remaining; writeLS("pb-auth", auth);
+      auth.remaining = me.remaining; writeLS("ga-auth", auth);
       const p = await api("/api/progress");
       mergeProgress(p.data?.sessions || {});
-      writeLS("pb-state", state);
+      writeLS("ga-state", state);
       renderAll(false);
     } catch {}
   }

@@ -26,7 +26,7 @@ function render(html, { title, description, canonical, article, appendArticle })
     head.push(`<meta name="google-adsense-account" content="${esc(ADSENSE_CLIENT)}">`);
     head.push(`<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${esc(ADSENSE_CLIENT)}" crossorigin="anonymous"></script>`);
   }
-  head.push(`<script>window.PB_ADS=${JSON.stringify({ client: ADSENSE_CLIENT, slots: SLOTS }).replace(/</g, "\\u003c")};</script>`);
+  head.push(`<script>window.GA_ADS=${JSON.stringify({ client: ADSENSE_CLIENT, slots: SLOTS }).replace(/</g, "\\u003c")};</script>`);
   if (canonical && SITE) head.push(`<link rel="canonical" href="${esc(SITE + canonical)}">`);
   html = html.replace("<!--HEAD-->", head.join("\n"));
   if (title) html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
