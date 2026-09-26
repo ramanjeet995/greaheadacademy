@@ -38,8 +38,9 @@ function save() {
   syncTimer = setTimeout(pushProgress, 1500);
 }
 async function pushProgress() {
-  if (!auth) return;
-  try { await api("/api/progress", { method: "PUT", body: JSON.stringify({ sessions: state.sessions, custom: state.custom }) }); } catch {}
+  if (!auth) return false;
+  try { await api("/api/progress", { method: "PUT", body: JSON.stringify({ sessions: state.sessions, custom: state.custom }) }); return true; }
+  catch { return false; }
 }
 
 // ---------------------------------------------------------------- API
@@ -116,7 +117,7 @@ function renderAccount() {
         <button class="link" id="logoutBtn" type="button">Sign out</button></div>
       <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> AI mentor · ${auth.remaining ?? "–"} of ${freeDaily} replies left today</label>`;
     $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); renderAll(false); };
-    $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAll(false); };
+    $("logoutBtn").onclick = () => signOut(false);
   } else {
     box.innerHTML = `<form id="loginForm" aria-label="Sign in">
       <div class="acc-row"><input type="text" id="uName" placeholder="Username" aria-label="Username" autocomplete="username" maxlength="20" required>
@@ -125,6 +126,26 @@ function renderAccount() {
       <span class="note" id="loginMsg">Free — new usernames are created automatically. Saves progress and unlocks the AI mentor. No PIN recovery.</span></form>`;
     $("loginForm").onsubmit = (e) => { e.preventDefault(); login(); };
   }
+}
+// Sign out: save progress to the account first, then clear this browser's copy so the next
+// person on this device starts fresh. Everything comes back on the next sign-in.
+async function signOut(force) {
+  const btn = $("logoutBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+  clearTimeout(syncTimer);
+  const saved = await pushProgress();
+  if (!saved && !force) {
+    $("account").insertAdjacentHTML("beforeend", `<div class="note" id="signOutWarn">Couldn't save your latest progress to your account (are you offline?). Signing out now would lose it on this device.
+      <button class="link" type="button" id="signOutAnyway">Sign out anyway</button></div>`);
+    $("signOutAnyway").onclick = () => signOut(true);
+    if (btn) { btn.disabled = false; btn.textContent = "Sign out"; }
+    return;
+  }
+  try { await api("/api/logout", { method: "POST" }); } catch {}
+  auth = null; writeLS("ga-auth", null);
+  state.sessions = {}; state.custom = [];
+  writeLS("ga-state", state);
+  renderAll(false);
 }
 async function login() {
   const msg = $("loginMsg");
