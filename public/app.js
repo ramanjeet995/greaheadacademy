@@ -114,12 +114,13 @@ function renderAll(scroll) {
   document.title = sys ? `How a ${sys.title} works — Gearhead Academy` : "Gearhead Academy — learn how things work by designing them";
   if (scroll) $("sheet").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
+const repliesLeft = () => (auth?.unlimited ? "unlimited replies" : `${auth?.remaining ?? "–"} of ${freeDaily} replies left today`);
 function renderAccount() {
   const box = $("account");
   if (auth) {
     box.innerHTML = `<div class="acc-row"><span>Signed in as <span class="who">${esc(auth.username)}</span></span>
         <button class="link" id="logoutBtn" type="button">Sign out</button></div>
-      <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> AI mentor · ${auth.remaining ?? "–"} of ${freeDaily} replies left today</label>`;
+      <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> AI mentor · ${repliesLeft()}</label>`;
     $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); renderAll(false); };
     $("logoutBtn").onclick = () => signOut(false);
   } else {
@@ -156,7 +157,7 @@ async function login() {
   msg.textContent = "Signing in…";
   try {
     const r = await api("/api/login", { method: "POST", body: JSON.stringify({ username: $("uName").value, pin: $("uPin").value }) });
-    auth = { token: r.token, username: r.username, remaining: r.remaining };
+    auth = { token: r.token, username: r.username, remaining: r.remaining, unlimited: !!r.unlimited };
     writeLS("ga-auth", auth);
     const p = await api("/api/progress");
     mergeProgress(p.data);
@@ -306,7 +307,7 @@ function feedbackPanel() {
       <div class="${auth ? "" : "here"}"><b>Without signing in</b><p>After each answer you see a fixed "how real designs do it" answer, then move to the next layer. Free, but it doesn't read what you wrote.</p></div>
       <div class="${auth ? "here" : ""}"><b>Signed in — free, just a username and PIN</b><p>The AI mentor reads your answer, says what holds up and what's missing, and asks follow-up questions about <em>your</em> design. ${freeDaily} replies a day; after that you get the fixed answers.</p></div>
     </div>
-    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or at the top right."}` : `Sign in with the box at the top right of the page${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : ""}.`}</p>
+    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${repliesLeft()}.` : "AI mentor is switched off — turn it on under Submit or at the top right."}` : `Sign in with the box at the top right of the page${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : ""}.`}</p>
   </section>`;
 }
 function pathNote() {
@@ -617,7 +618,7 @@ function aiStatusHtml() {
     <button class="link" type="button" id="aiSignIn">Sign in to turn it on</button> — any username and PIN, free.</span>`;
   if ((auth.remaining ?? 1) <= 0) return `<span class="dot off"></span><span><b>AI mentor: no replies left today.</b> You'll see the built-in answer until tomorrow.</span>`;
   return `<label class="toggle"><input type="checkbox" id="aiToggleInline" ${state.aiOn ? "checked" : ""}>
-    <span><b>AI mentor ${state.aiOn ? "on" : "off"}</b> — ${state.aiOn ? `feedback on your own design (${auth.remaining ?? "–"} of ${freeDaily} replies left today)` : "you'll see the built-in answer instead"}</span></label>`;
+    <span><b>AI mentor ${state.aiOn ? "on" : "off"}</b> — ${state.aiOn ? `feedback on your own design (${repliesLeft()})` : "you'll see the built-in answer instead"}</span></label>`;
 }
 function bindAiStatus(sys) {
   const t = $("aiToggleInline");
@@ -757,7 +758,7 @@ function fillAds() {
   if (auth) {
     try {
       const me = await api("/api/me");
-      auth.remaining = me.remaining; writeLS("ga-auth", auth);
+      auth.remaining = me.remaining; auth.unlimited = !!me.unlimited; writeLS("ga-auth", auth);
       const p = await api("/api/progress");
       mergeProgress(p.data);
       writeLS("ga-state", state);

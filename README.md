@@ -132,6 +132,8 @@ The generator uses `claude-opus-5` for quality (a few cents per system) with ser
 | `ADSENSE_CLIENT`, `AD_SLOT_TOP`, `AD_SLOT_SIDE`, `AD_SLOT_BOTTOM` | empty | AdSense; used at build time, so redeploy after changing |
 | `SITE_URL` | Netlify's `URL` | Override the site URL used in the sitemap and canonical links |
 
+**Unlimited users.** Usernames in `config/unlimited-users.json` (and the optional `UNLIMITED_USERS` env var, comma-separated) skip the per-user and per-IP AI limits; the site-wide daily caps still apply. Usernames are open, so only list names you have already signed in with and own.
+
 ## Accounts and security
 
 - Username + PIN, no email. New usernames are created on first sign-in; there's no recovery.

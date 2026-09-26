@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getStore } from "@netlify/blobs";
 import SYSTEMS from "../../public/systems.json";
 import FIELDS from "../../public/fields.json";
+import UNLIMITED_USERS from "../../config/unlimited-users.json";
 
 const LEVELS = ["Student", "Junior", "Mid-level", "Senior", "Modern"];
 const BY_ID = Object.fromEntries(SYSTEMS.map((s) => [s.id, s]));
@@ -15,6 +16,10 @@ const MAX_ANSWER_CHARS = 2500;
 const MAX_CONVERSATION_CHARS = 8000;
 
 const store = (name) => getStore({ name, consistency: "strong" });
+// Usernames with no per-user/per-IP AI limits: config/unlimited-users.json plus the optional
+// UNLIMITED_USERS env var (comma-separated). The site-wide daily cap still applies to them.
+const isUnlimited = (username) => [...UNLIMITED_USERS, ...String(process.env.UNLIMITED_USERS || "").split(",")]
+  .map((u) => String(u).trim().toLowerCase()).filter(Boolean).includes(String(username || "").toLowerCase());
 const env = (k) => process.env[k];
 
 export const config = { path: "/api/*" };
@@ -49,7 +54,7 @@ async function route(req, context, url) {
     await store("sessions").delete(user.token);
     return json({ ok: true });
   }
-  if (p === "/api/me" && method === "GET") return json({ username: user.username, remaining: await remaining(user.username) });
+  if (p === "/api/me" && method === "GET") return json({ username: user.username, remaining: await remaining(user.username), unlimited: isUnlimited(user.username) });
   if (p === "/api/progress" && method === "GET") {
     const data = await store("progress").get(user.username, { type: "json" });
     return json({ data: data || null });
@@ -103,7 +108,7 @@ async function generate(req, context, user) {
   const d = day();
   const keys = [
     // Suggested topics are a fixed, shared list (total cost is bounded), so only the site-wide cap applies.
-    ...(suggested ? [] : [[`${d}/gen/${user.username}`, limit(env("GEN_DAILY"), 2), "user"], [`${d}/genip/${clientIp(req, context)}`, limit(env("GEN_IP_DAILY"), 4), "ip"]]),
+    ...(suggested || isUnlimited(user?.username) ? [] : [[`${d}/gen/${user.username}`, limit(env("GEN_DAILY"), 2), "user"], [`${d}/genip/${clientIp(req, context)}`, limit(env("GEN_IP_DAILY"), 4), "ip"]]),
     [`${d}/genglobal`, limit(env("GEN_GLOBAL_DAILY"), 200), "global"],
   ];
   const counted = [];
@@ -213,7 +218,7 @@ async function login(req, context) {
   }
   const token = randomHex(32);
   await store("sessions").setJSON(token, { username, expires: Date.now() + SESSION_DAYS * 864e5 });
-  return json({ token, username, created: !existing, remaining: await remaining(username) });
+  return json({ token, username, created: !existing, remaining: await remaining(username), unlimited: isUnlimited(username) });
 }
 
 async function authUser(req) {
@@ -258,8 +263,10 @@ async function mentor(req, context, user) {
   // Blobs has no atomic increment, so two simultaneous requests can overshoot by one — the global cap bounds it.
   const d = day();
   const keys = [
-    [`${d}/u/${user.username}`, limit(env("FREE_DAILY_REPLIES"), 5), "user"],
-    [`${d}/ip/${clientIp(req, context)}`, limit(env("IP_DAILY_REPLIES"), 15), "ip"],
+    ...(isUnlimited(user.username) ? [] : [
+      [`${d}/u/${user.username}`, limit(env("FREE_DAILY_REPLIES"), 5), "user"],
+      [`${d}/ip/${clientIp(req, context)}`, limit(env("IP_DAILY_REPLIES"), 15), "ip"],
+    ]),
     [`${d}/global`, limit(env("GLOBAL_DAILY_REPLIES"), 1000), "global"],
   ];
   const counted = [];
@@ -337,6 +344,7 @@ ${task}`,
 }
 
 async function remaining(username) {
+  if (isUnlimited(username)) return 9999;
   return Math.max(0, limit(env("FREE_DAILY_REPLIES"), 5) - (await getCount(`${day()}/u/${username}`)));
 }
 
