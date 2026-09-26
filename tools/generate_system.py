@@ -47,6 +47,8 @@ Write exactly 5 layers, going deeper and from older to modern solutions:
 
 Each layer after the first opens with a question: a concrete scenario that exposes the limit of the
 previous layer and asks the learner how they'd solve it. Layer 1 has no question (the starting prompt is it).
+If a question mentions a part not introduced in an earlier layer's "real" text, introduce that part in plain words
+first (what it is and where it sits), so a learner who only knows the earlier layers isn't confused.
 
 Reply with only JSON, no prose:
 {{"title": "short name", "era": "e.g. 1900s → today",

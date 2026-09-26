@@ -202,11 +202,11 @@
    {
     "name": "Traction and counterweight",
     "ask": "The building is getting taller and a rope drum would be enormous. How else could a motor move the car — and how could you make the motor's job easier?",
-    "real": "A traction machine passes the ropes over a grooved sheave with a counterweight on the other side. Friction in the grooves drives the car, and the counterweight balances the car plus part of its load, so the motor only has to move the difference."
+    "real": "A traction machine passes the ropes over a grooved sheave with a counterweight on the other side. Friction in the grooves drives the car, and the counterweight balances the car plus part of its load, so the motor only has to move the difference. A brake on the motor shaft at the top — the machine brake — clamps the sheave to hold the car still at each floor; it's separate from the emergency catch on the car."
    },
    {
     "name": "Overspeed and doors",
-    "ask": "The rope is fine, but the machine's brake fails and the car runs away downward — your rope-tension brake never fires. How do you stop it? And what else could hurt someone?",
+    "ask": "Two brakes now exist: the everyday machine brake at the top that holds the drive wheel, and your emergency catch on the car. Say the machine brake at the top fails while the rope is fine — the car starts running away downward, and your catch never fires because the rope hasn't broken. How would you detect that and stop the car? And what else in the building could hurt someone?",
     "real": "Modern safety gear triggers on speed, not rope tension: an overspeed governor — a spinning flyweight device driven by a rope attached to the car — trips wedge clamps that grip the rails progressively for a controlled stop. Door interlocks make sure the car can't move unless every landing door is locked shut."
    },
    {

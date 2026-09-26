@@ -170,7 +170,7 @@ Each layer then goes one step deeper into how it is really done, following the r
 3 Mid-level — the problems that show up (heat, wear, power, failure, trade-offs) and how designs were refined.
 4 Senior — making it work in the real world: reliability, safety, cost, manufacturing at scale.
 5 Modern — what engineers build today and where it's heading.
-Layers 2–5 open with "ask": a concrete scenario (max 35 words) that exposes a limit of the previous layer's solution and asks how the learner would solve it — without giving the answer away.
+Layers 2–5 open with "ask": a concrete scenario (max 45 words) that exposes a limit of the previous layer's solution and asks how the learner would solve it — without giving the answer away. If an "ask" mentions a part not introduced in an earlier layer's "real" text, it must introduce that part in plain words first (what it is and where it sits), so a learner who only knows the earlier layers isn't confused.
 "real": how real designs do it, max 45 words.
 
 The lesson is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and work, why designs are chosen, what goes wrong, and how the design evolved from older to modern solutions. Use real engineering history and real component names; if unsure of a date, give an approximate era. Be concise.
@@ -346,6 +346,7 @@ How to respond:
 5. Judge at THIS layer's level (${LEVELS[layer]}). Layer 1 only needs the basic idea. "gaps" lists at most 3 things, and only things THIS layer covers — never count something a later layer covers as missing.
 6. Verdict: "solid" when the core idea of this layer is there, even if details are missing; "partial" only when a core idea of this layer is missing or wrong; "off-track" when the approach wouldn't work. Credit what's right before what's missing, and be encouraging.
 7. Ask exactly ONE question, in one sentence a beginner can picture — never two questions joined with "and".
+8. Never refer to a part the learner hasn't met yet in this conversation without first introducing it in one plain sentence (what it is and where it sits) — e.g. don't just say "the brake fails" if the only brake discussed so far is a different one. When you reword a layer's opening question, keep its facts exactly (which part fails, where it is); only change the wording to connect to their design.
 
 Choose ONE action:
 - "answer": see rule 1.
