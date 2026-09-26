@@ -164,6 +164,11 @@ button.link{background:none;border:0;color:var(--accent);font:600 14px var(--bod
 .drawer-head .crumbs b{color:var(--ink)}
 .drawer .close{padding:8px 12px}
 .drawer h3{font:700 26px/1.15 var(--display);margin:0;text-transform:capitalize}
+.xquote{margin:0;padding:8px 12px;border-left:3px solid var(--rule);color:var(--muted);font-size:14px;font-style:italic}
+.simplify-btn{position:fixed;z-index:60;font:600 14px/1 var(--body);padding:10px 14px;border-radius:999px;border:2px solid var(--ink);
+  background:var(--accent);color:var(--on-accent);box-shadow:3px 3px 0 var(--ink);cursor:pointer;white-space:nowrap}
+.simplify-btn:hover{filter:brightness(1.08)}
+.xbody ::selection{background:var(--accent-soft)}
 
 .notes{grid-column:2;max-width:74ch;color:var(--ink)}
 .notes h2{font:700 22px/1.2 var(--display);margin:8px 0 10px}

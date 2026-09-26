@@ -256,7 +256,7 @@ function renderEntry(sys, e) {
   if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)}</span>${esc(sys.layers[e.layer].real)}</div></div>`;
   if (e.type === "ask") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body"><div class="ask" style="margin-top:0;--c:${lvl(e.layer).color}"><span class="tag">Layer ${e.layer + 1} · ${lvl(e.layer).name} — ${esc(sys.layers[e.layer].name)}</span>${esc(askFor(sys, e.layer))}</div></div></div>`;
   if (e.type === "hint") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body hintbox"><span class="tag">Hint</span>${esc(e.text)}</div></div>`;
-  if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body xbody"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words to learn more</span>${linkify(e.text)}</div></div>`;
+  if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words, or select a hard passage to simplify it</span><div class="xbody" data-src="layer:${sys.id}:${e.layer}">${linkify(e.text)}</div></div></div>`;
   if (e.type === "note") return `<p class="err">${esc(e.text)}</p>`;
   if (e.type === "final") return `<div class="msg mentor" style="max-width:none"><div class="who">Mentor · the complete picture</div><div class="final">
       <span class="tag">You've designed the whole system, layer by layer</span>
@@ -268,7 +268,7 @@ function modeSwitch(s) {
   return `<div class="modebar"><div class="modes" role="group" aria-label="How do you want to learn this?">
       <button data-mode="design" aria-pressed="${!explain}">Design it myself</button>
       <button data-mode="explain" aria-pressed="${explain}">Explain it to me</button></div>
-    <span class="note">${explain ? "Read each layer explained from scratch. Tap underlined words to dig deeper." : "You describe your design; the mentor compares it with real ones and takes you deeper."}</span></div>`;
+    <span class="note">${explain ? "Read each layer explained from scratch. Tap underlined words to dig deeper, or select a hard passage to have it explained more simply." : "You describe your design; the mentor compares it with real ones and takes you deeper."}</span></div>`;
 }
 function bindModeSwitch(sys) {
   document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => {
@@ -360,7 +360,7 @@ function renderExplainMode(sys) {
     sections.push(`<section class="xlayer" style="--c:${lvl(i).color}">
       <span class="tag">Layer ${i + 1} · ${lvl(i).name} — ${esc(sys.layers[i].name)}</span>
       <p class="xq">${esc(askFor(sys, i))}</p>
-      <div class="xbody" id="xl-${i}">${cached ? linkify(cached) : `<span class="thinking">Writing the explanation</span>`}</div>
+      <div class="xbody" id="xl-${i}" data-src="layer:${sys.id}:${i}">${cached ? linkify(cached) : `<span class="thinking">Writing the explanation</span>`}</div>
       <div class="actions"><button class="btn" data-try="${i}">Try this layer myself</button></div>
     </section>`);
   }
@@ -411,42 +411,88 @@ function startDesignAt(sys, layer) {
   $("answer")?.focus();
 }
 
-// The side panel: click a term to open it, click terms inside to go deeper, Back to step out.
-const termCache = new Map();
-let termStack = [];
+// The side panel shows a stack of entries: a term ({kind:"term", term}) or a simplified passage
+// ({kind:"simplify", text, src}). Tap terms inside to go deeper; Back steps out.
+const panelCache = new Map();
+let panelStack = [];
 document.addEventListener("click", (e) => {
   const t = e.target.closest(".term");
   if (!t) return;
   e.preventDefault();
-  openTerm(t.dataset.term, !t.closest("#explainer"));
+  openPanel({ kind: "term", term: t.dataset.term }, !t.closest("#explainer"));
 });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("explainer").hidden) closeTerms(); });
-function openTerm(term, fresh) {
-  termStack = fresh ? [term] : [...termStack, term];
-  showTerm();
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("explainer").hidden) closePanel(); });
+function openPanel(entry, fresh) {
+  panelStack = fresh ? [entry] : [...panelStack, entry];
+  showPanel();
 }
-function closeTerms() { $("explainer").hidden = true; termStack = []; }
-async function showTerm() {
-  const panel = $("explainer"), term = termStack[termStack.length - 1];
-  panel.hidden = false;
-  $("xBack").hidden = termStack.length < 2;
-  $("xCrumbs").innerHTML = termStack.map((t, i) => i === termStack.length - 1 ? `<b>${esc(t)}</b>` : esc(t)).join(" › ");
-  $("xTitle").textContent = term;
-  const key = term.toLowerCase();
-  if (termCache.has(key)) { $("xBody").innerHTML = linkify(termCache.get(key)); $("xClose").focus(); return; }
-  $("xBody").innerHTML = `<span class="thinking">Explaining ${esc(term)}</span>`;
+function closePanel() { $("explainer").hidden = true; panelStack = []; }
+const entryLabel = (en) => (en.kind === "term" ? en.term : "In simpler words");
+const entryKey = (en) => (en.kind === "term" ? `term:${en.term.toLowerCase()}` : `simplify:${en.src}|${en.text}`);
+async function showPanel() {
+  const entry = panelStack[panelStack.length - 1], body = $("xBody");
+  $("explainer").hidden = false;
+  $("xBack").hidden = panelStack.length < 2;
+  $("xCrumbs").innerHTML = panelStack.map((en, i) => i === panelStack.length - 1 ? `<b>${esc(entryLabel(en))}</b>` : esc(entryLabel(en))).join(" › ");
+  $("xTitle").textContent = entryLabel(entry);
+  $("xQuote").hidden = entry.kind !== "simplify";
+  $("xQuote").textContent = entry.kind === "simplify" ? entry.text : "";
+  const stillShowing = () => panelStack[panelStack.length - 1] === entry;
+  const fill = (r) => {
+    body.dataset.src = entry.kind === "term" ? `term:${entry.term}` : `simplify:${r.key}`;
+    body.innerHTML = linkify(r.text);
+  };
   $("xClose").focus();
+  const cached = panelCache.get(entryKey(entry));
+  if (cached) return fill(cached);
+  body.dataset.src = "";
+  body.innerHTML = `<span class="thinking">${entry.kind === "term" ? `Explaining ${esc(entry.term)}` : "Rewriting it more simply"}</span>`;
   try {
     const v = currentView();
-    const r = await api("/api/term", { method: "POST", body: JSON.stringify({ term, systemId: v.type === "sys" ? v.id : undefined }) });
-    termCache.set(key, r.text);
-    if (termStack[termStack.length - 1] === term) $("xBody").innerHTML = linkify(r.text);
+    const r = entry.kind === "term"
+      ? await api("/api/term", { method: "POST", body: JSON.stringify({ term: entry.term, systemId: v.type === "sys" ? v.id : undefined }) })
+      : await api("/api/simplify", { method: "POST", body: JSON.stringify({ text: entry.text, src: entry.src }) });
+    panelCache.set(entryKey(entry), r);
+    if (stillShowing()) fill(r);
   } catch (e) {
-    if (termStack[termStack.length - 1] === term) $("xBody").innerHTML = `<p class="err">${esc(e.data?.message || "That explanation didn't come through. Try again.")}</p>`;
+    if (stillShowing()) body.innerHTML = `<p class="err">${esc(e.data?.message || "That explanation didn't come through. Try again.")}</p>`;
   }
 }
-$("xBack").onclick = () => { termStack.pop(); showTerm(); };
-$("xClose").onclick = closeTerms;
+$("xBack").onclick = () => { panelStack.pop(); showPanel(); };
+$("xClose").onclick = closePanel;
+
+// Select a hard passage inside any explanation → a floating "Explain this more simply" button.
+let pendingSimplify = null;
+function updateSimplifyButton() {
+  const btn = $("simplifyBtn"), sel = getSelection();
+  const hide = () => { btn.hidden = true; pendingSimplify = null; };
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return hide();
+  const text = sel.toString().replace(/\s+/g, " ").trim();
+  if (text.length < 15) return hide();
+  const within = (node) => (node?.nodeType === 1 ? node : node?.parentElement)?.closest("[data-src]");
+  const box = within(sel.anchorNode);
+  if (!box || box !== within(sel.focusNode) || !box.dataset.src) return hide();
+  pendingSimplify = { text: text.slice(0, 1200), src: box.dataset.src, inPanel: !!box.closest("#explainer") };
+  const r = sel.getRangeAt(0).getBoundingClientRect();
+  btn.hidden = false;
+  const w = btn.offsetWidth, h = btn.offsetHeight;
+  const below = r.bottom + 10 + h < innerHeight;
+  btn.style.top = `${below ? r.bottom + 10 : Math.max(8, r.top - h - 10)}px`;
+  btn.style.left = `${Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8)}px`;
+}
+let selTimer;
+document.addEventListener("selectionchange", () => { clearTimeout(selTimer); selTimer = setTimeout(updateSimplifyButton, 120); });
+addEventListener("scroll", () => { if (!$("simplifyBtn").hidden) updateSimplifyButton(); }, { passive: true, capture: true });
+// Keep the selection alive when the button is pressed (desktop and touch).
+$("simplifyBtn").addEventListener("pointerdown", (e) => e.preventDefault());
+$("simplifyBtn").onclick = () => {
+  if (!pendingSimplify) return;
+  const { inPanel, ...rest } = pendingSimplify;
+  $("simplifyBtn").hidden = true;
+  getSelection()?.removeAllRanges();
+  // From the page: start a fresh panel. From inside the panel: go one level deeper (Back returns).
+  openPanel({ kind: "simplify", ...rest }, !inPanel);
+};
 function refresh(sys) {
   const v = currentView();
   renderPath(v); renderAccount();

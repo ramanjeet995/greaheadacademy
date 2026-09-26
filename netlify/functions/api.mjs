@@ -34,6 +34,7 @@ async function route(req, context, url) {
   const topicMatch = p.match(/^\/api\/topic\/(x-[a-z0-9-]+)$/);
   if (p === "/api/explain" && method === "POST") return explainLayer(req, context);
   if (p === "/api/term" && method === "POST") return explainTerm(req, context);
+  if (p === "/api/simplify" && method === "POST") return simplify(req, context);
   if (topicMatch && method === "GET") {
     const system = await store("topics").get(topicMatch[1], { type: "json" });
     return system ? json({ system }) : json({ error: "not_found" }, 404);
@@ -366,6 +367,51 @@ async function explainTerm(req, context) {
 Explain the engineering term "${term}"${sys ? ` (it came up while learning how a ${sys.title} works — but explain it in general, not only for that machine)` : ""}.
 Write 80–150 words in 1–2 short paragraphs: what it is, what it does, where you'd find it, and a simple comparison. Link 2–5 related terms. Don't repeat the term as a title.`;
   return writeExplanation(cache, key, prompt, 450, quota.counted);
+}
+
+// ---- "explain this more simply": re-explain a passage the learner selected.
+// Only passages from our own cached explanations are accepted, so this can't be used as a general chatbot.
+const plainText = (s) => String(s || "").replace(/\[\[([^\[\]|]+)(?:\|([^\[\]]+))?\]\]/g, (_, t, shown) => shown || t).replace(/\s+/g, " ").trim();
+const norm = (s) => plainText(s).toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
+
+async function sourceText(src) {
+  const [kind, ...rest] = String(src || "").split(":");
+  if (kind === "layer" && rest.length === 2) return store("explain").get(`${rest[0]}/${Number(rest[1])}`);
+  if (kind === "term" && rest.length) return store("terms").get(slugify(rest.join(":")));
+  if (kind === "simplify" && /^[0-9a-f]{32}$/.test(rest[0] || "")) return store("simplify").get(rest[0]);
+  return null;
+}
+
+async function simplify(req, context) {
+  const body = await req.json().catch(() => ({}));
+  const passage = plainText(body.text).slice(0, 1200);
+  if (passage.length < 15) return json({ error: "too_short", message: "Select a longer passage — at least a few words." }, 400);
+  const source = await sourceText(body.src);
+  if (!source || !norm(source).includes(norm(passage))) return json({ error: "bad_source", message: "Select text inside an explanation to simplify it." }, 400);
+
+  const cache = store("simplify");
+  const key = toHex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${body.src}|${norm(passage)}`))).slice(0, 32);
+  const cached = await cache.get(key);
+  if (cached) return json({ text: cached, key, cached: true });
+
+  const quota = await spendExplainQuota(req, context);
+  if (quota.blocked) return quota.blocked;
+  const prompt = `${EXPLAIN_RULES}
+
+A beginner found this passage hard to understand:
+"""
+${passage}
+"""
+It comes from this explanation (for context only):
+"""
+${plainText(source).slice(0, 2500)}
+"""
+
+Re-explain ONLY that passage much more simply: 60–150 words, very short sentences, one everyday comparison, and explain any jargon in passing instead of assuming it. Keep it accurate. Link 1–4 terms. Don't start with "This passage" or "Simply put".`;
+  const res = await writeExplanation(cache, key, prompt, 450, quota.counted);
+  if (res.status !== 200) return res;
+  const data = await res.json();
+  return json({ ...data, key });
 }
 
 async function spendExplainQuota(req, context) {
