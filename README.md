@@ -127,7 +127,7 @@ The generator uses `claude-opus-5` for quality (a few cents per system) with ser
 | `EXPLAIN_GLOBAL_DAILY` | 3000 | New explanations site-wide per day |
 | `GEN_MODEL` | `MODEL` | Model that writes explored topics |
 | `GEN_DAILY` | 2 | New topics per user per day (cached topics are free) |
-| `GEN_IP_DAILY` | 4 | New topics per IP per day |
+| `GEN_IP_DAILY` | 4 | New typed topics per IP per day (suggested topics only count toward `GEN_GLOBAL_DAILY`) |
 | `GEN_GLOBAL_DAILY` | 200 | New topics site-wide per day |
 | `ADSENSE_CLIENT`, `AD_SLOT_TOP`, `AD_SLOT_SIDE`, `AD_SLOT_BOTTOM` | empty | AdSense; used at build time, so redeploy after changing |
 | `SITE_URL` | Netlify's `URL` | Override the site URL used in the sitemap and canonical links |

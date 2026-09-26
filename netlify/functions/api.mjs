@@ -102,8 +102,8 @@ async function generate(req, context, user) {
   if (!suggested && !user) return json({ error: "auth", message: "Sign in to explore your own topics. Suggested topics are free to open." }, 401);
   const d = day();
   const keys = [
-    ...(suggested ? [] : [[`${d}/gen/${user.username}`, limit(env("GEN_DAILY"), 2), "user"]]),
-    [`${d}/genip/${clientIp(req, context)}`, limit(env("GEN_IP_DAILY"), 4), "ip"],
+    // Suggested topics are a fixed, shared list (total cost is bounded), so only the site-wide cap applies.
+    ...(suggested ? [] : [[`${d}/gen/${user.username}`, limit(env("GEN_DAILY"), 2), "user"], [`${d}/genip/${clientIp(req, context)}`, limit(env("GEN_IP_DAILY"), 4), "ip"]]),
     [`${d}/genglobal`, limit(env("GEN_GLOBAL_DAILY"), 200), "global"],
   ];
   const counted = [];

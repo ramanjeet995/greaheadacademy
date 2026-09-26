@@ -52,7 +52,10 @@ async function api(path, opts = {}) {
   if (res.status === 401 && auth && path !== "/api/login") {
     auth = null; writeLS("ga-auth", null); renderAccount();
   }
-  if (!res.ok) throw Object.assign(new Error(data.message || "Request failed"), { status: res.status, data });
+  if (!res.ok) {
+    if (!data.message) data.message = res.status >= 500 ? `The server had a problem (error ${res.status}). Try again in a moment.` : `Request failed (error ${res.status}).`;
+    throw Object.assign(new Error(data.message), { status: res.status, data });
+  }
   return data;
 }
 
@@ -64,6 +67,7 @@ const customOf = () => state.custom.filter((s) => s.field === state.field);
 function currentView() {
   const m = location.pathname.match(/^\/s\/([a-z0-9-]+)\/?$/);
   if (m && byId(m[1])) { state.field = byId(m[1]).field; return { type: "sys", id: m[1] }; }
+  if (m && writing?.id === m[1]) return { type: "writing", id: m[1] };
   if (m && m[1].startsWith("x-")) { loadTopic(m[1]); return { type: "loading", id: m[1] }; }
   return { type: "home" };
 }
@@ -182,7 +186,8 @@ function renderPath(v) {
   const suggestedIds = new Set(suggested.map((n) => `x-${slugify(n)}`));
   const suggestItem = (n) => {
     const sys = byId(`x-${slugify(n)}`);
-    return sys ? item(sys) : `<li><button class="sysbtn" type="button" data-suggest="${esc(n)}"><span>${esc(n)}</span><span class="era">Not opened yet</span></button></li>`;
+    const busyHere = writing?.id === `x-${slugify(n)}` && !writing.error;
+    return sys ? item(sys) : `<li><button class="sysbtn" type="button" data-suggest="${esc(n)}" ${current(`x-${slugify(n)}`)}><span>${esc(n)}</span><span class="era">${busyHere ? "Writing…" : "Not opened yet"}</span></button></li>`;
   };
   const mine = customOf().filter((s) => !suggestedIds.has(s.id));
   $("path").innerHTML = `
@@ -197,7 +202,7 @@ function renderPath(v) {
     state.field = e.target.value; save();
     if (v.type === "home") renderPath(v); else go({ type: "home" });
   };
-  $("path").querySelectorAll("[data-suggest]").forEach((b) => (b.onclick = () => openSuggestion(b.dataset.suggest, b)));
+  $("path").querySelectorAll("[data-suggest]").forEach((b) => (b.onclick = () => openSuggestion(b.dataset.suggest)));
   const list = [...builtins, ...customOf()];
   const done = list.filter((s) => state.sessions[s.id]?.done).length;
   $("doneCount").textContent = `${done}/${list.length}`;
@@ -205,6 +210,7 @@ function renderPath(v) {
 }
 function renderMain(v) {
   if (v.type === "loading") { $("sheet").innerHTML = `<p class="thinking">Loading this topic</p>`; return; }
+  if (v.type === "writing") return renderWriting();
   v.type === "home" ? renderHome() : renderSession(byId(v.id));
 }
 
@@ -221,43 +227,58 @@ function bindExplore(where) {
   if (f) f.onsubmit = (e) => { e.preventDefault(); explore(where); };
 }
 async function explore(where) {
-  const input = $(`topic-${where}`), msg = $(`topicMsg-${where}`), btn = $(`explore-${where}`).querySelector("button");
+  const input = $(`topic-${where}`), msg = $(`topicMsg-${where}`);
   const topic = input.value.trim().replace(/\s+/g, " ");
-  if (topic.length < 3) { msg.textContent = "Type a machine or system, e.g. \"bicycle gears\"."; input.focus(); return; }
-  btn.disabled = true;
-  msg.innerHTML = `<span class="thinking">Writing a lesson on ${esc(topic)}</span>`;
-  try {
-    const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic, field: state.field }) });
-    adoptTopic(r.system);
-  } catch (e) {
-    msg.textContent = e.data?.message || "Couldn't write that lesson. Try again.";
-    btn.disabled = false;
-  }
+  if (topic.length < 3) { msg.textContent = "Type a topic, e.g. \"bicycle gears\"."; input.focus(); return; }
+  writeTopic(topic);
 }
 // Add (or refresh) a generated topic in this learner's list and open it.
-function adoptTopic(sys) {
-  if (!sys.custom) return go({ type: "sys", id: sys.id }); // it was a built-in system
+function addTopic(sys) {
+  if (!sys.custom) return; // it was a built-in system
   const i = state.custom.findIndex((x) => x.id === sys.id);
   if (i < 0) state.custom.push(sys);
   else if ((state.custom[i].v || 1) !== (sys.v || 1)) { state.custom[i] = sys; delete state.sessions[sys.id]; } // rewritten lesson
   save();
-  go({ type: "sys", id: sys.id });
 }
+function adoptTopic(sys) { addTopic(sys); go({ type: "sys", id: sys.id }); }
 // Suggested topics: written once for everyone, open without signing in.
-async function openSuggestion(name, btn) {
+function openSuggestion(name) { writeTopic(name); }
+
+// Writing a new lesson: switch to its page straight away and show progress there,
+// then the lesson itself — or the reason it failed, with Try again.
+let writing = null; // { id, name, field, error }
+async function writeTopic(name) {
   const id = `x-${slugify(name)}`;
   if (byId(id)) return go({ type: "sys", id });
-  btn.disabled = true;
-  const era = btn.querySelector(".era");
-  if (era) era.innerHTML = `<span class="thinking">Writing the lesson</span>`;
+  if (writing?.id === id && !writing.error) return go({ type: "sys", id }); // already in progress
+  writing = { id, name, field: state.field, error: null, started: Date.now() };
+  go({ type: "sys", id });
   try {
-    const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic: name, field: state.field }) });
-    adoptTopic(r.system);
+    const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic: name, field: writing.field }) });
+    const onPage = location.pathname.replace(/\/$/, "") === `/s/${id}`;
+    writing = null;
+    if (onPage) return adoptTopic(r.system);
+    addTopic(r.system); // learner moved on — just add it to their list
+    renderAll(false);
   } catch (e) {
-    btn.disabled = false;
-    if (era) era.textContent = "Not opened yet";
-    $("sideMsg").textContent = e.data?.message || `Couldn't open "${name}". Try again.`;
+    if (writing?.id !== id) return;
+    writing.error = e.data?.message || "Couldn't write that lesson. Try again.";
+    if (currentView().type === "writing") renderAll(false);
   }
+}
+function renderWriting() {
+  const w = writing;
+  $("sheet").innerHTML = `
+    <p class="eyebrow">${esc(fieldOf(w.field).name)}</p>
+    <h3 class="ptitle">${esc(w.name)}</h3>
+    ${w.error
+      ? `<p class="err">${esc(w.error)}</p>
+         <div class="actions" style="margin-top:14px"><button class="btn primary" id="retryWrite" type="button">Try again</button>
+         <a class="btn" href="/" data-nav="home">Back to topics</a></div>`
+      : `<p class="thinking">Writing this lesson — this happens once, then it's saved for everyone. Usually 10–30 seconds</p>
+         <p class="note">You can keep browsing; it will appear under your topics when it's ready.</p>`}`;
+  const retry = $("retryWrite");
+  if (retry) retry.onclick = () => { const n = w.name; writing = null; writeTopic(n); };
 }
 // Shown on every lesson, plus a health notice in the medicine field.
 function trustNote(sys) {
