@@ -104,14 +104,10 @@ const dots = (sys) => `<span class="dots" aria-label="${reached(sys)} of ${sys.l
 // ---------------------------------------------------------------- chrome
 function renderAll(scroll) {
   const v = currentView();
-  renderFields(); renderAccount(); renderPath(v); renderMain(v); renderNotes(v);
+  renderAccount(); renderPath(v); renderMain(v); renderNotes(v);
   const sys = v.type === "sys" ? byId(v.id) : null;
   document.title = sys ? `How a ${sys.title} works — Gearhead Academy` : "Gearhead Academy — learn how things work by designing them";
   if (scroll) $("sheet").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
-}
-function renderFields() {
-  $("fields").innerHTML = `<span class="lbl">Field</span>` + FIELDS.map((f) => `<button class="field" data-f="${f.id}" aria-pressed="${f.id === state.field}">${f.name}</button>`).join("");
-  $("fields").querySelectorAll(".field").forEach((b) => (b.onclick = () => { state.field = b.dataset.f; save(); go({ type: "home" }); }));
 }
 function renderAccount() {
   const box = $("account");
@@ -154,17 +150,34 @@ function mergeProgress(server) {
     else if ((sys.v || 1) > (state.custom[i].v || 1)) state.custom[i] = sys;
   }
 }
+// Left sidebar: field dropdown, its disclaimer, and its topics (systems, suggested, yours).
 function renderPath(v) {
-  const item = (s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${v.type === "sys" && v.id === s.id ? `aria-current="page"` : ""}>
+  const field = fieldOf();
+  const current = (id) => (v.type === "sys" && v.id === id ? `aria-current="page"` : "");
+  const item = (s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${current(s.id)}>
       <span>${esc(s.title)}</span><span class="era">${esc(s.era || "")}</span>${dots(s)}</a></li>`;
-  const mine = customOf();
   const builtins = systemsOf();
-  $("path").innerHTML = (builtins.length ? `<h2>${esc(fieldOf().name)} systems</h2><ol class="syslist">${builtins.map(item).join("")}</ol>`
-      : `<h2>${esc(fieldOf().name)}</h2><p class="note">Pick a topic on the right, or explore your own below.</p>`)
-    + (mine.length ? `<h2 style="margin-top:18px">Your topics</h2><ol class="syslist">${mine.map(item).join("")}</ol>` : "")
-    + exploreForm("side");
-  bindExplore("side");
-  const list = [...systemsOf(), ...mine];
+  const suggested = (field.suggestions || []).filter((n) => !builtins.some((s) => slugify(s.title) === slugify(n)));
+  const suggestedIds = new Set(suggested.map((n) => `x-${slugify(n)}`));
+  const suggestItem = (n) => {
+    const sys = byId(`x-${slugify(n)}`);
+    return sys ? item(sys) : `<li><button class="sysbtn" type="button" data-suggest="${esc(n)}"><span>${esc(n)}</span><span class="era">Not opened yet</span></button></li>`;
+  };
+  const mine = customOf().filter((s) => !suggestedIds.has(s.id));
+  $("path").innerHTML = `
+    <label class="fieldlbl" for="fieldSelect">Field</label>
+    <select id="fieldSelect">${FIELDS.map((f) => `<option value="${f.id}" ${f.id === field.id ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select>
+    <p class="trust side">Lessons in ${esc(field.name)} are written by AI and haven't been reviewed by an expert yet. They're a starting point — double-check anything important.${field.id === "biology" ? " Educational only — not medical advice." : ""}</p>
+    ${builtins.length ? `<h2>Systems</h2><ol class="syslist">${builtins.map(item).join("")}</ol>` : ""}
+    ${suggested.length ? `<h2>${builtins.length ? "More topics" : "Topics"}</h2><ol class="syslist">${suggested.map(suggestItem).join("")}</ol>` : ""}
+    ${mine.length ? `<h2>Your topics</h2><ol class="syslist">${mine.map(item).join("")}</ol>` : ""}
+    <p class="note" id="sideMsg" aria-live="polite"></p>`;
+  $("fieldSelect").onchange = (e) => {
+    state.field = e.target.value; save();
+    if (v.type === "home") renderPath(v); else go({ type: "home" });
+  };
+  $("path").querySelectorAll("[data-suggest]").forEach((b) => (b.onclick = () => openSuggestion(b.dataset.suggest, b)));
+  const list = [...builtins, ...customOf()];
   const done = list.filter((s) => state.sessions[s.id]?.done).length;
   $("doneCount").textContent = `${done}/${list.length}`;
   $("doneBar").style.width = (list.length ? (done / list.length) * 100 : 0) + "%";
@@ -214,23 +227,20 @@ async function openSuggestion(name, btn) {
   const id = `x-${slugify(name)}`;
   if (byId(id)) return go({ type: "sys", id });
   btn.disabled = true;
-  const label = btn.textContent;
-  btn.innerHTML = `<span class="thinking">Opening</span>`;
+  const era = btn.querySelector(".era");
+  if (era) era.innerHTML = `<span class="thinking">Writing the lesson</span>`;
   try {
     const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic: name, field: state.field }) });
     adoptTopic(r.system);
   } catch (e) {
-    btn.disabled = false; btn.textContent = label;
-    const note = btn.closest(".card")?.querySelector(".note");
-    if (note) note.textContent = e.data?.message || "Couldn't open it. Try again.";
+    btn.disabled = false;
+    if (era) era.textContent = "Not opened yet";
+    $("sideMsg").textContent = e.data?.message || `Couldn't open "${name}". Try again.`;
   }
 }
-// Shown on every AI-written lesson, plus a health notice in the medicine field.
+// Shown on every lesson, plus a health notice in the medicine field.
 function trustNote(sys) {
-  const notes = [];
-  if (sys.custom) notes.push("AI-written lesson, not yet reviewed by an expert — double-check anything important.");
-  if (sys.field === "biology") notes.push("Educational only — not medical advice.");
-  return notes.length ? `<p class="trust">${notes.map(esc).join(" ")}</p>` : "";
+  return `<p class="trust">Written by AI and not yet reviewed by an expert — double-check anything important.${sys.field === "biology" ? " Educational only — not medical advice." : ""}</p>`;
 }
 function renderNotes(v) {
   const sys = v.type === "sys" ? byId(v.id) : null;
@@ -254,7 +264,7 @@ function feedbackPanel() {
       <div class="${auth ? "" : "here"}"><b>Without signing in</b><p>After each answer you see a fixed "how real designs do it" answer, then move to the next layer. Free, but it doesn't read what you wrote.</p></div>
       <div class="${auth ? "here" : ""}"><b>Signed in — free, just a username and PIN</b><p>The AI mentor reads your answer, says what holds up and what's missing, and asks follow-up questions about <em>your</em> design. ${freeDaily} replies a day; after that you get the fixed answers.</p></div>
     </div>
-    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or in the sidebar."}` : `Sign in with the box at the top right of the page${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : ""}.`}</p>
+    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or at the top right."}` : `Sign in with the box at the top right of the page${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : ""}.`}</p>
   </section>`;
 }
 function pathNote() {
@@ -263,35 +273,15 @@ function pathNote() {
   if ((auth.remaining ?? 1) <= 0) return "No AI mentor replies left today: you'll see the fixed built-in answer until tomorrow.";
   return "AI mentor on: it will read your answer and give feedback on your own design.";
 }
+// Home (right side): the same for every field — the field only changes the sidebar's topics.
 function renderHome() {
-  const list = systemsOf(), field = fieldOf();
-  const suggestions = (field.suggestions || []).filter((n) => !list.some((s) => slugify(s.title) === slugify(n)));
   $("sheet").innerHTML = `
-    <p class="eyebrow">${esc(field.name)}</p>
     <h3 class="ptitle">Pick a topic to design</h3>
-    ${field.reviewed ? "" : `<p class="trust">Lessons in ${esc(field.name)} are written by AI and haven't been reviewed by an expert yet. They're a starting point — double-check anything important.${field.id === "biology" ? " Educational only — not medical advice." : ""}</p>`}
-    <p class="intro">Each topic starts with a problem to solve. Answer in plain words: which parts you'd use, how they connect and move, and why. Every topic goes through five layers:</p>
+    <p class="intro">Choose a field and a topic from the topic list, or type any topic below. Each one starts with a problem to solve. Answer in plain words: which parts you'd use, how they connect and move, and why. Every topic goes through five layers:</p>
     <ol class="ladder">${LEVELS.map((l, i) => `<li style="--c:${l.color}"><span class="lvl">Layer ${i + 1} · ${l.name}</span><span>${LAYER_BLURBS[i]}</span></li>`).join("")}</ol>
-    ${feedbackPanel()}
     ${exploreForm("home")}
-    ${list.length ? `<h4 class="sec">Systems</h4>` : ""}
-    <div class="cards">${list.map((s) => {
-      const st = state.sessions[s.id];
-      return `<div class="card"><div class="row"><span class="era">${esc(s.era || "")}</span>${dots(s)}</div>
-        <h5>${esc(s.title)}</h5><p>${esc(s.prompt.split(". ")[0])}.</p>
-        <div class="row"><span class="note">${st?.done ? "Completed" : st ? `On layer ${reached(s) + 1} of ${s.layers.length}` : `${s.layers.length} layers`}</span>
-        <a class="btn ${st && !st.done ? "primary" : ""}" href="/s/${s.id}" data-nav="${s.id}">${st?.done ? "Review" : st ? "Continue" : "Start"}</a></div></div>`;
-    }).join("")}</div>
-    ${suggestions.length ? `<h4 class="sec">${list.length ? "More topics to explore" : "Topics"}</h4>
-    <div class="cards">${suggestions.map((n) => {
-      const sys = byId(`x-${slugify(n)}`), st = sys && state.sessions[sys.id];
-      return `<div class="card"><div class="row"><span class="era">${sys?.era ? esc(sys.era) : "AI-written"}</span>${sys ? dots(sys) : ""}</div>
-        <h5>${esc(n)}</h5>
-        <div class="row"><span class="note">${st?.done ? "Completed" : st ? `On layer ${reached(sys) + 1} of 5` : "5 layers"}</span>
-        <button class="btn" type="button" data-suggest="${esc(n)}">${st?.done ? "Review" : st ? "Continue" : "Start"}</button></div></div>`;
-    }).join("")}</div>` : ""}`;
+    ${feedbackPanel()}`;
   bindExplore("home");
-  $("sheet").querySelectorAll("[data-suggest]").forEach((b) => (b.onclick = () => openSuggestion(b.dataset.suggest, b)));
 }
 
 // ---------------------------------------------------------------- guided session

@@ -19,18 +19,18 @@ Keep the AI caps low until AdSense shows your real revenue per 1,000 page views,
 
 ## Fields
 
-Defined in `public/fields.json` (name, teaching guidance for the AI, placeholder, suggested topics, `reviewed` flag):
+Defined in `public/fields.json` (name, teaching guidance for the AI, placeholder, suggested topics). The field is a dropdown in the sidebar; it only changes the sidebar's topic list — the main area (pick a topic, explore any topic) is the same for every field.
 
 | Field | Content |
 |---|---|
-| Mechanical | 5 hand-written systems + suggested topics |
-| Electromechanical & robotics | 5 hand-written systems + suggested topics |
+| Mechanical | 5 built-in systems + suggested topics |
+| Electromechanical & robotics | 5 built-in systems + suggested topics |
 | Electrical & electronics | suggested topics (AI-written, unreviewed) |
 | Civil engineering | suggested topics (AI-written, unreviewed) |
 | Software & coding | suggested topics (AI-written, unreviewed) |
 | Human body & medicine | suggested topics (AI-written, unreviewed, educational-only notice) |
 
-Suggested topics open **without signing in**: each is written once by Claude on first click and shared with everyone (≈ 46 topics × ≈ $0.01 ≈ $0.50 total). Every AI-written lesson shows an "AI-written, not yet reviewed" label. To add a field or topic, edit `fields.json` and deploy. To promote a good AI-written lesson to a permanent, indexed page, review it and add it to `systems.json`.
+Suggested topics open **without signing in**: each is written once by Claude on first click and shared with everyone (≈ 46 topics × ≈ $0.01 ≈ $0.50 total). All lessons — including the built-in systems, which were also written with AI — show a "written by AI, not yet reviewed by an expert" notice, in the sidebar for every field and on every lesson. To add a field or topic, edit `fields.json` and deploy. To promote a good AI-written lesson to a permanent, indexed page, review it and add it to `systems.json`.
 
 ## Project layout
 
