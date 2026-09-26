@@ -116,19 +116,17 @@ function renderFields() {
 function renderAccount() {
   const box = $("account");
   if (auth) {
-    box.innerHTML = `<div>Signed in as <span class="who">${esc(auth.username)}</span></div>
-      <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> Use the AI mentor</label>
-      <div class="note">AI replies left today: <b>${auth.remaining ?? "–"}</b> of ${freeDaily}. Without the AI mentor you still get the real-world answer after each layer.</div>
-      <button class="link" id="logoutBtn" style="justify-self:start">Sign out</button>`;
+    box.innerHTML = `<div class="acc-row"><span>Signed in as <span class="who">${esc(auth.username)}</span></span>
+        <button class="link" id="logoutBtn" type="button">Sign out</button></div>
+      <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> AI mentor · ${auth.remaining ?? "–"} of ${freeDaily} replies left today</label>`;
     $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); renderAll(false); };
     $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAll(false); };
   } else {
-    box.innerHTML = `<form id="loginForm">
-      <div class="note"><b>Save your progress</b> and unlock ${freeDaily} AI mentor replies a day. Pick any username and a PIN — new usernames are created automatically.</div>
-      <input type="text" id="uName" placeholder="username" autocomplete="username" maxlength="20" required>
-      <div class="row"><input type="password" id="uPin" placeholder="PIN (4–8 digits)" inputmode="numeric" autocomplete="current-password" maxlength="8" required>
-      <button class="btn" type="submit">Go</button></div>
-      <span class="note" id="loginMsg">There's no PIN recovery — keep it somewhere safe.</span></form>`;
+    box.innerHTML = `<form id="loginForm" aria-label="Sign in">
+      <div class="acc-row"><input type="text" id="uName" placeholder="Username" aria-label="Username" autocomplete="username" maxlength="20" required>
+      <input type="password" id="uPin" placeholder="PIN (4–8 digits)" aria-label="PIN" inputmode="numeric" autocomplete="current-password" maxlength="8" required>
+      <button class="btn primary" type="submit">Sign in</button></div>
+      <span class="note" id="loginMsg">Free — new usernames are created automatically. Saves progress and unlocks the AI mentor. No PIN recovery.</span></form>`;
     $("loginForm").onsubmit = (e) => { e.preventDefault(); login(); };
   }
 }
@@ -236,17 +234,15 @@ function trustNote(sys) {
 }
 function renderNotes(v) {
   const sys = v.type === "sys" ? byId(v.id) : null;
+  $("aboutTop").hidden = !!sys;
   if (!sys) {
-    if ($("notes").dataset.client) $("notes").innerHTML = homeNotes();
+    if ($("notes").dataset.client) $("notes").innerHTML = "";
     return;
   }
   $("notes").dataset.client = "1";
   $("notes").innerHTML = `<h2>How does a ${esc(sys.title.toLowerCase())} work?</h2><p>${esc(sys.prompt)}</p>
     <details><summary>Reference notes: how real designs do it (spoilers)</summary>
     ${sys.layers.map((l, i) => `<h4>Layer ${i + 1} · ${esc(l.name)}</h4><p>${esc(l.real)}</p>`).join("")}</details>`;
-}
-function homeNotes() {
-  return `<h2>What is Gearhead Academy?</h2><p>Pick a machine and you're asked how you would make it work. You answer in plain words, compare your idea with real designs, then go one layer deeper — from the basic idea to what engineers build today.</p>`;
 }
 
 // ---------------------------------------------------------------- home
@@ -258,7 +254,7 @@ function feedbackPanel() {
       <div class="${auth ? "" : "here"}"><b>Without signing in</b><p>After each answer you see a fixed "how real designs do it" answer, then move to the next layer. Free, but it doesn't read what you wrote.</p></div>
       <div class="${auth ? "here" : ""}"><b>Signed in — free, just a username and PIN</b><p>The AI mentor reads your answer, says what holds up and what's missing, and asks follow-up questions about <em>your</em> design. ${freeDaily} replies a day; after that you get the fixed answers.</p></div>
     </div>
-    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or in the sidebar."}` : `Sign in from the box at the top of the sidebar${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : " on the left"}.`}</p>
+    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or in the sidebar."}` : `Sign in with the box at the top right of the page${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : ""}.`}</p>
   </section>`;
 }
 function pathNote() {
@@ -344,7 +340,7 @@ function bindOutdated(sys) {
   if (!b) return;
   b.onclick = async () => {
     const msg = $("rewriteMsg");
-    if (!auth) { msg.textContent = "Sign in on the left first."; return; }
+    if (!auth) { msg.textContent = "Sign in at the top of the page first."; return; }
     b.disabled = true;
     msg.innerHTML = `<span class="thinking">Rewriting</span>`;
     try {

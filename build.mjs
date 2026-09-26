@@ -21,7 +21,7 @@ const systems = JSON.parse(fs.readFileSync(path.join(SRC, "systems.json"), "utf8
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.cpSync(SRC, OUT, { recursive: true });
 
-function render(html, { title, description, canonical, article, appendArticle }) {
+function render(html, { title, description, canonical, article, appendArticle, hideIntro }) {
   const head = [];
   if (ADSENSE_CLIENT) {
     head.push(`<meta name="google-adsense-account" content="${esc(ADSENSE_CLIENT)}">`);
@@ -34,6 +34,7 @@ function render(html, { title, description, canonical, article, appendArticle })
   if (description) html = html.replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${esc(description)}">`);
   if (article) html = html.replace(/<!--SSR-->[\s\S]*?<!--\/SSR-->/, article);
   if (appendArticle) html = html.replace("<!--/SSR-->", appendArticle + "<!--/SSR-->");
+  if (hideIntro) html = html.replace('<section class="about-top" id="aboutTop">', '<section class="about-top" id="aboutTop" hidden>');
   return html;
 }
 
@@ -66,6 +67,7 @@ for (const sys of systems) {
     description: `Design a ${sys.title.toLowerCase()} yourself, layer by layer, from the basic idea to modern engineering. ${sys.prompt}`.slice(0, 300),
     canonical: `/s/${sys.id}`,
     article,
+    hideIntro: true,
   }));
 }
 
