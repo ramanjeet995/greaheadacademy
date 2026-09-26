@@ -347,6 +347,8 @@ function renderEntry(sys, e) {
   if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)} · built-in answer</span>${esc(sys.layers[e.layer].real)}${auth ? "" : `<p class="note" style="margin:10px 0 0">This is the same fixed answer everyone sees — it doesn't look at what you wrote. Sign in (free, any username and PIN) to get the AI mentor's feedback on your own design, then use “Start this system over” to resubmit.</p>`}</div></div>`;
   if (e.type === "ask") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body"><div class="ask" style="margin-top:0;--c:${lvl(e.layer).color}"><span class="tag">Layer ${e.layer + 1} · ${lvl(e.layer).name} — ${esc(sys.layers[e.layer].name)}</span>${esc(askFor(sys, e.layer))}</div></div></div>`;
   if (e.type === "hint") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body hintbox"><span class="tag">Hint</span>${esc(e.text)}</div></div>`;
+  if (e.type === "q") return `<div class="msg you q"><div class="who">Your question · not graded</div><div class="body">${esc(e.text)}</div></div>`;
+  if (e.type === "a") return `<div class="msg mentor"><div class="who">Mentor · answer to your question</div><div class="body xbody">${linkify(e.text)}</div></div>`;
   if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words, or select a hard passage to simplify it</span><div class="xbody" data-src="layer:${sys.id}:${e.layer}">${linkify(e.text)}</div></div></div>`;
   if (e.type === "note") return `<p class="err">${esc(e.text)}</p>`;
   if (e.type === "final") return `<div class="msg mentor" style="max-width:none"><div class="who">Mentor · the complete picture</div><div class="final">
@@ -417,6 +419,7 @@ function renderSession(sys) {
       <div class="aistatus" id="aiStatus">${aiStatusHtml()}</div>
       <div id="confirmBox"></div>
     </div>`}
+    ${askBoxHtml()}
     <div class="pager">
       <button class="link" id="restartBtn">Start this system over</button>
       ${next ? `<a class="btn ${s.done ? "primary" : ""}" href="/s/${next.id}" data-nav="${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="/" data-nav="home">All systems →</a>`}
@@ -429,6 +432,7 @@ function renderSession(sys) {
     $("noRestart").onclick = () => { $("restartBox").innerHTML = ""; };
   };
   bindModeSwitch(sys); bindOutdated(sys);
+  bindAskBox(sys);
   if (s.done) return;
   const ta = $("answer");
   ta.value = s.draft || "";
@@ -626,6 +630,43 @@ function bindAiStatus(sys) {
   const si = $("aiSignIn");
   if (si) si.onclick = () => { const u = $("uName"); u?.scrollIntoView({ behavior: "smooth", block: "center" }); u?.focus(); };
 }
+// "Ask the mentor": questions about the explanation, separate from the answer box.
+function askBoxHtml() {
+  const blocked = !auth ? `<button class="link" type="button" id="qSignIn">Sign in</button> to ask the mentor questions (free).`
+    : !auth.unlimited && (auth.remaining ?? 1) <= 0 ? "No AI replies left today — questions count as replies." : "";
+  return `<div class="askq">
+    <label for="qInput">Question about the explanation? Ask the mentor — it won't count as your answer.</label>
+    <div class="row"><input type="text" id="qInput" maxlength="600" placeholder="e.g. What does “caster” mean here?" ${blocked ? "disabled" : ""}>
+    <button class="btn" type="button" id="qBtn" ${blocked ? "disabled" : ""}>Ask</button></div>
+    <span class="note" id="qMsg">${blocked || `Uses 1 AI reply (${repliesLeft()}).`}</span></div>`;
+}
+function bindAskBox(sys) {
+  const si = $("qSignIn");
+  if (si) si.onclick = () => { const u = $("uName"); u?.scrollIntoView({ behavior: "smooth", block: "center" }); u?.focus(); };
+  const input = $("qInput"), btn = $("qBtn");
+  if (!input || input.disabled) return;
+  const send = () => askMentor(sys, input.value);
+  btn.onclick = send;
+  input.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); send(); } };
+}
+async function askMentor(sys, raw) {
+  if (busy) return;
+  const question = String(raw || "").trim();
+  if (question.length < 3) { $("qMsg").textContent = "Type a question first."; $("qInput").focus(); return; }
+  const s = session(sys);
+  const convo = conversation(sys);
+  push(sys, { type: "q", text: question, layer: s.layer });
+  refresh(sys);
+  setBusy(true, "Answering your question");
+  try {
+    const r = await api("/api/ask", { method: "POST", body: JSON.stringify({ systemId: sys.id, layer: s.layer, conversation: convo, question }) });
+    auth.remaining = r.remaining; writeLS("ga-auth", auth);
+    push(sys, { type: "a", text: r.answer });
+  } catch (e) {
+    if (e.status === 429 && e.data?.scope === "user") { auth.remaining = 0; writeLS("ga-auth", auth); }
+    push(sys, { type: "note", text: e.data?.message || "The mentor couldn't answer that. Try again." });
+  } finally { setBusy(false); refresh(sys); $("qInput")?.focus(); }
+}
 function refresh(sys) {
   const v = currentView();
   renderPath(v); renderAccount();
@@ -634,7 +675,7 @@ function refresh(sys) {
 function push(sys, entry) { session(sys).thread.push(entry); save(); }
 function setBusy(on, label) {
   busy = on;
-  ["submitBtn", "hintBtn", "explainBtn", "revealBtn"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
+  ["submitBtn", "hintBtn", "explainBtn", "revealBtn", "qBtn"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
   const live = $("live");
   if (live) live.innerHTML = on ? `<div class="msg mentor" style="margin-top:16px"><div class="who">Mentor</div><div class="body"><span class="thinking">${esc(label)}</span></div></div>` : "";
 }
@@ -652,6 +693,8 @@ function conversation(sys) {
     if (e.type === "ask") return `Mentor (opened layer ${e.layer + 1}): ` + askFor(sys, e.layer);
     if (e.type === "real") return `Mentor (showed the real design for layer ${e.layer + 1})`;
     if (e.type === "hint") return "Mentor hint: " + e.text;
+    if (e.type === "q") return "Learner asked a question (not an answer): " + e.text.slice(0, 600);
+    if (e.type === "a") return "Mentor answered: " + e.text.slice(0, 800);
     if (e.type === "explain") return `Mentor (explained layer ${e.layer + 1} to the learner in full — they may now paraphrase it; check they understood the mechanism)`;
     return "";
   }).filter(Boolean).join("\n\n");

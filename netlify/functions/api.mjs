@@ -77,6 +77,7 @@ async function route(req, context, url) {
     return json({ ok: true });
   }
   if (p === "/api/mentor" && method === "POST") return mentor(req, context, user);
+  if (p === "/api/ask" && method === "POST") return askQuestion(req, context, user);
   return json({ error: "not_found" }, 404);
 }
 
@@ -383,6 +384,67 @@ ${task}`,
     console.error("mentor failed", e?.status || "", e?.message || e);
     await Promise.all(counted.map(unbump));
     return json({ error: "mentor_failed", message: aiErrorMessage(e, "The mentor's reply didn't come through.") }, 502);
+  }
+}
+
+// ---- "Ask the mentor": a free-form question about the topic. It doesn't grade or advance the
+// lesson, and counts as one AI reply (same limits as the mentor).
+async function askQuestion(req, context, user) {
+  const body = await req.json().catch(() => ({}));
+  const sys = await getSystem(body.systemId);
+  const layer = Number.isInteger(body.layer) ? body.layer : -1;
+  if (!sys || layer < 0 || layer >= sys.layers.length) return json({ error: "bad_request" }, 400);
+  const question = String(body.question || "").trim();
+  if (question.length < 3) return json({ error: "bad_request", message: "Type a question first." }, 400);
+  if (question.length > 600) return json({ error: "too_long", message: "Keep questions under 600 characters." }, 400);
+  const conversation = String(body.conversation || "").slice(-MAX_CONVERSATION_CHARS);
+
+  const d = day();
+  const keys = [
+    ...(isUnlimited(user.username) ? [] : [
+      [`${d}/u/${user.username}`, limit(env("FREE_DAILY_REPLIES"), 5), "user"],
+      [`${d}/ip/${clientIp(req, context)}`, limit(env("IP_DAILY_REPLIES"), 15), "ip"],
+    ]),
+    [`${d}/global`, limit(env("GLOBAL_DAILY_REPLIES"), 1000), "global"],
+  ];
+  const counted = [];
+  for (const [k, max, scope] of keys) {
+    const n = await bump(k);
+    counted.push(k);
+    if (n > max) {
+      await Promise.all(counted.map(unbump));
+      return json({ error: "quota", scope, message: scope === "user" ? "You've used today's AI replies — questions count as replies." : "The AI mentor is at capacity today." }, 429);
+    }
+  }
+  try {
+    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const response = await client.messages.create({
+      model: env("MODEL") || "claude-haiku-4-5",
+      max_tokens: 600,
+      system: [{ type: "text", text: `You are a mentor teaching engineering. ${RULES}\n\n${systemContext(sys)}`, cache_control: { type: "ephemeral" } }],
+      messages: [{
+        role: "user",
+        content: `CURRENT LAYER: ${layer + 1} of ${sys.layers.length} (${sys.layers[layer].name}).
+
+CONVERSATION SO FAR:
+${conversation || "(none yet)"}
+
+The learner has a QUESTION — this is not an answer to grade and must not move the lesson on:
+"""
+${question}
+"""
+
+Answer it for a beginner in 60–180 words: plain words, short sentences, an everyday comparison if it helps, relating it to their design and this layer where you can. Don't give away the answer to the current layer's open question unless they explicitly ask for it — if the question would reveal it, give a helpful nudge instead and mention they can press "Show how real designs do it". If the question isn't about this topic or learning engineering, science or how things work, say briefly that you can only help with this topic. Wrap 1–4 key technical terms in double square brackets, e.g. [[pinion]]. Plain text only, blank line between paragraphs.`,
+      }],
+    });
+    if (response.stop_reason === "refusal") throw new Error("refusal");
+    const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim().slice(0, 3000);
+    if (!text) throw new Error("empty");
+    return json({ answer: text, remaining: await remaining(user.username) });
+  } catch (e) {
+    console.error("ask failed", e?.status || "", e?.message || e);
+    await Promise.all(counted.map(unbump));
+    return json({ error: "ask_failed", message: aiErrorMessage(e, "The mentor couldn't answer that.") }, 502);
   }
 }
 
