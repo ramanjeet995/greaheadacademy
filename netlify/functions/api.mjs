@@ -268,9 +268,10 @@ async function login(req, context) {
 
 async function authUser(req) {
   const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  if (!/^[0-9a-f]{64}$/.test(token)) return null;
+  if (!/^[0-9a-f]{64}$/.test(token)) { if (token) console.warn("auth: malformed token"); return null; }
   const row = await store("sessions").get(token, { type: "json" });
-  if (!row || row.expires < Date.now()) return null;
+  if (!row) { console.warn("auth: session not found", token.slice(0, 8)); return null; }
+  if (row.expires < Date.now()) { console.warn("auth: session expired", row.username); return null; }
   return { username: row.username, token };
 }
 
@@ -343,7 +344,9 @@ How to respond:
 2. If their answer ALSO contains a question, answer that question first, briefly, at the start of "compare" — never ignore it.
 3. The era in the lesson is background, not a trap. Don't penalise technology that existed in that era, and don't read the setup too literally (e.g. "no power" in a safety question means the SAFETY DEVICE must work without power, not that the whole machine has none). If they propose something a later layer or modern design uses, recognise it ("that's what engineers adopted later"), credit it, and steer back to this layer's question.
 4. Facts: base any correction ONLY on the "Real designs" notes above. Don't add technical claims beyond them unless you're certain, and never invent failure modes or parts the system doesn't have.
-5. Judge at THIS layer's level (${LEVELS[layer]}). Layer 1 only needs the basic idea. "gaps" lists at most 3 things, and only things THIS layer covers — never count something a later layer covers as missing.
+5. Judge at THIS layer's level (${LEVELS[layer]}). Layer 1 only needs the basic idea.
+   "holds": at most 3 things they got right.
+   "gaps": ONLY real problems or omissions in their answer for THIS layer, at most 3. Never list the thing your "question" is about, and never list anything a later layer covers (e.g. how the machine is controlled, powered or kept safe, if that's a later layer). If nothing is wrong, "gaps" must be an empty list — don't invent gaps to fill it.
 6. Verdict: "solid" when the core idea of this layer is there, even if details are missing; "partial" only when a core idea of this layer is missing or wrong; "off-track" when the approach wouldn't work. Credit what's right before what's missing, and be encouraging.
 7. Ask exactly ONE question, in one sentence a beginner can picture — never two questions joined with "and".
 8. Never refer to a part the learner hasn't met yet in this conversation without first introducing it in one plain sentence (what it is and where it sits) — e.g. don't just say "the brake fails" if the only brake discussed so far is a different one. When you reword a layer's opening question, keep its facts exactly (which part fails, where it is); only change the wording to connect to their design.

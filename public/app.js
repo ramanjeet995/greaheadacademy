@@ -51,6 +51,7 @@ async function api(path, opts = {}) {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && auth && path !== "/api/login") {
     auth = null; writeLS("ga-auth", null); renderAccount();
+    data.message = "You were signed out (your session ended). Sign in again at the top right — your answer is still in the box, so you can resend it.";
   }
   if (!res.ok) {
     if (!data.message) data.message = res.status >= 500 ? `The server had a problem (error ${res.status}). Try again in a moment.` : `Request failed (error ${res.status}).`;
@@ -338,7 +339,8 @@ function renderEntry(sys, e) {
   }
   if (e.type === "feedback") {
     const v = e.verdict === "solid" ? "v-solid" : e.verdict === "partial" ? "v-partial" : "v-off";
-    const li = (a) => (Array.isArray(a) && a.length ? a : ["—"]).map((x) => `<li>${esc(x)}</li>`).join("");
+    const has = (a) => Array.isArray(a) && a.some((x) => String(x || "").trim());
+    const li = (a) => a.filter((x) => String(x || "").trim()).map((x) => `<li>${esc(x)}</li>`).join("");
     const next = e.nextLayer;
     const kind = e.action === "fix" ? ["fix", "Rethink this part"]
       : e.action === "deeper" ? ["deeper", "Go deeper into your design"]
@@ -346,7 +348,7 @@ function renderEntry(sys, e) {
       : ["", `Layer ${next + 1} · ${lvl(next).name} — ${esc(sys.layers[next]?.name || "")}`];
     return `<div class="msg mentor"><div class="who">Mentor · compared with real designs</div><div class="body">
       <span class="verdict ${v}">${esc(e.verdict || "")}</span><p>${esc(e.compare)}</p>
-      <div class="cols"><div class="got"><h6>Holds up</h6><ul>${li(e.holds)}</ul></div><div class="miss"><h6>Missing or different</h6><ul>${li(e.gaps)}</ul></div></div>
+      ${has(e.holds) || has(e.gaps) ? `<div class="cols">${has(e.holds) ? `<div class="got"><h6>Holds up</h6><ul>${li(e.holds)}</ul></div>` : ""}${has(e.gaps) ? `<div class="miss"><h6>Missing or different</h6><ul>${li(e.gaps)}</ul></div>` : ""}</div>` : ""}
       <div class="ask ${kind[0]}" ${next != null && e.action === "advance" ? `style="--c:${lvl(next).color}"` : ""}><span class="tag">${kind[1]}</span>${esc(e.question)}</div></div></div>`;
   }
   if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)} · built-in answer</span>${esc(sys.layers[e.layer].real)}${auth ? "" : `<p class="note" style="margin:10px 0 0">This is the same fixed answer everyone sees — it doesn't look at what you wrote. Sign in (free, any username and PIN) to get the AI mentor's feedback on your own design, then use “Start this system over” to resubmit.</p>`}</div></div>`;
