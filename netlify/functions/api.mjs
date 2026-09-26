@@ -142,11 +142,20 @@ Reply with only JSON:
 
   try {
     const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
-    const response = await client.messages.create({
+    const ask = () => client.messages.create({
       model: env("GEN_MODEL") || env("MODEL") || "claude-haiku-4-5",
-      max_tokens: 1800,
+      max_tokens: 2500,
       messages: [{ role: "user", content: prompt }],
     });
+    let response = await ask();
+    const usable = (r) => {
+      const o = parseJson(r.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
+      return o && (o.error || (o.title && o.prompt && Array.isArray(o.layers) && o.layers.length >= 5));
+    };
+    if (response.stop_reason !== "refusal" && !usable(response)) {
+      console.warn("generate: unusable answer, retrying once", response.stop_reason);
+      response = await ask();
+    }
     if (response.stop_reason === "refusal") {
       await Promise.all(counted.map(unbump));
       return json({ error: "not_supported", message: "That topic isn't one we can write a lesson on. Try a machine or mechanism." }, 422);
@@ -168,9 +177,9 @@ Reply with only JSON:
     await topics.setJSON(id, system);
     return json({ system });
   } catch (e) {
-    console.error("generate failed", e?.message || e);
+    console.error("generate failed", e?.status || "", e?.message || e);
     await Promise.all(counted.map(unbump));
-    return json({ error: "generate_failed", message: "Couldn't write that lesson. Try again." }, 502);
+    return json({ error: "generate_failed", message: aiErrorMessage(e, "Couldn't write that lesson.") }, 502);
   }
 }
 
@@ -321,9 +330,9 @@ ${task}`,
       remaining: left,
     });
   } catch (e) {
-    console.error("mentor failed", e?.message || e);
+    console.error("mentor failed", e?.status || "", e?.message || e);
     await Promise.all(counted.map(unbump));
-    return json({ error: "mentor_failed", message: "The mentor's reply didn't come through. Try again." }, 502);
+    return json({ error: "mentor_failed", message: aiErrorMessage(e, "The mentor's reply didn't come through.") }, 502);
   }
 }
 
@@ -465,10 +474,26 @@ async function writeExplanation(cache, key, prompt, maxTokens, counted) {
     await cache.set(key, text);
     return json({ text });
   } catch (e) {
-    console.error("explain failed", e?.message || e);
+    console.error("explain failed", e?.status || "", e?.message || e);
     await Promise.all(counted.map(unbump));
-    return json({ error: "explain_failed", message: "The explanation didn't come through. Try again." }, 502);
+    return json({ error: "explain_failed", message: aiErrorMessage(e, "The explanation didn't come through.") }, 502);
   }
+}
+
+// Turn a failed Claude call into a message that says what actually went wrong,
+// so the site owner can fix setup problems without digging through logs.
+function aiErrorMessage(e, lead) {
+  const msg = String(e?.message || "");
+  if (!env("ANTHROPIC_API_KEY")) return `${lead} The AI isn't set up yet: ANTHROPIC_API_KEY is missing in Netlify's environment variables (add it, then redeploy).`;
+  if (e?.status === 401) return `${lead} The Claude API key was rejected (error 401). Check ANTHROPIC_API_KEY in Netlify, then redeploy.`;
+  if (e?.status === 403) return `${lead} The Claude API key isn't allowed to do this (error 403). Check the key's workspace permissions in the Anthropic Console.`;
+  if (e?.status === 404) return `${lead} The AI model wasn't found (error 404). Check the MODEL setting in Netlify.`;
+  if (/credit balance|billing|spend limit|spending limit/i.test(msg)) return `${lead} The Anthropic account is out of credit or hit its spending limit. Add credit in the Anthropic Console.`;
+  if (e?.status === 429) return `${lead} Claude's rate limit was reached (error 429). Try again in a minute.`;
+  if (e?.status === 529 || e?.status >= 500) return `${lead} Claude is busy right now (error ${e.status}). Try again in a moment.`;
+  if (msg === "bad_json" || msg === "empty") return `${lead} The AI's answer came back in the wrong format. Try again.`;
+  if (msg === "refusal") return `${lead} The AI declined this one.`;
+  return `${lead} Try again.${msg ? ` (${msg.slice(0, 120)})` : ""}`;
 }
 
 async function getCount(k) {
