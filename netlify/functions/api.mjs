@@ -37,6 +37,15 @@ export default async (req, context) => {
 async function route(req, context, url) {
   const p = url.pathname, method = req.method;
   if (p === "/api/config" && method === "GET") return json({ freeDaily: limit(env("FREE_DAILY_REPLIES"), 5) });
+  // Setup check for the site owner: says whether the AI key is visible to functions (never the key itself).
+  if (p === "/api/health" && method === "GET") return json({
+    aiKeyPresent: Boolean(env("ANTHROPIC_API_KEY")),
+    aiKeyLooksValid: /^sk-ant-/.test(String(env("ANTHROPIC_API_KEY") || "").trim()),
+    pinPepperPresent: Boolean(env("PIN_PEPPER")),
+    model: env("MODEL") || "claude-haiku-4-5",
+    deployId: env("DEPLOY_ID") || null,
+    context: env("CONTEXT") || null,
+  });
   if (p === "/api/login" && method === "POST") return login(req, context);
   const topicMatch = p.match(/^\/api\/topic\/(x-[a-z0-9-]+)$/);
   if (p === "/api/explain" && method === "POST") return explainLayer(req, context);
