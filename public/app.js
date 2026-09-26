@@ -270,7 +270,7 @@ function renderHome() {
     <p class="eyebrow">${esc(field.name)}</p>
     <h3 class="ptitle">Pick a topic to design</h3>
     ${field.reviewed ? "" : `<p class="trust">Lessons in ${esc(field.name)} are written by AI and haven't been reviewed by an expert yet. They're a starting point — double-check anything important.${field.id === "biology" ? " Educational only — not medical advice." : ""}</p>`}
-    <p class="intro">You'll be asked how you would make it work. Answer in plain words — parts, how they connect, how they move, why you'd choose them. No calculations. You'll see how your method compares with real designs, then go one layer deeper, following the mechanism you chose.</p>
+    <p class="intro">Each topic starts with a problem to solve. Answer in plain words: which parts you'd use, how they connect and move, and why. Every topic goes through five layers:</p>
     <ol class="ladder">${LEVELS.map((l, i) => `<li style="--c:${l.color}"><span class="lvl">Layer ${i + 1} · ${l.name}</span><span>${LAYER_BLURBS[i]}</span></li>`).join("")}</ol>
     ${feedbackPanel()}
     ${exploreForm("home")}
