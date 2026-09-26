@@ -478,7 +478,12 @@ async function remaining(username) {
 const EXPLAIN_RULES = `Write for a complete beginner: plain words, short sentences, no maths, formulas or numbers-heavy specs. Use an everyday comparison where it helps. Wrap the key technical terms a beginner might not know in double square brackets exactly as written in the sentence, e.g. [[steering knuckle]] or [[tie rod|tie rods]] (term|text shown). Separate paragraphs with a blank line. Plain text only — no headings, lists markup, or bold. Weapons and military systems: explain mechanisms and history like a museum would; never construction steps, materials, dimensions, recipes, explosive or propellant chemistry, or ways to modify a weapon or defeat safety or legal controls. Health topics: educational only — no diagnosis, treatment or dosing advice, and nothing about making pathogens or toxins more dangerous.`;
 
 // Generated topics can be rewritten, so their cached explanations are keyed by version.
-const explainKey = (sys, layer) => (sys.custom ? `${sys.id}@${sys.v || 1}/${layer}` : `${sys.id}/${layer}`);
+// Built-in lessons can be edited, so their keys include a short hash of the layer's text:
+// editing a layer automatically gets it a fresh explanation.
+const textHash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.codePointAt(0)) >>> 0; return h.toString(36); };
+const explainKey = (sys, layer) => (sys.custom
+  ? `${sys.id}@${sys.v || 1}/${layer}`
+  : `${sys.id}/${layer}#${textHash(`${sys.prompt}|${sys.layers[layer]?.ask || ""}|${sys.layers[layer]?.real || ""}`)}`);
 
 async function explainLayer(req, context) {
   const body = await req.json().catch(() => ({}));
