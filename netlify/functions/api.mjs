@@ -80,6 +80,28 @@ async function getSystem(id) {
 
 // ---- explore any topic: Claude writes a new 5-layer lesson. Each topic is written once and cached,
 // so a second learner asking for the same machine costs nothing.
+// Exact shape of a written lesson, enforced by the API's structured output.
+const LESSON_SCHEMA = {
+  type: "object",
+  properties: {
+    supported: { type: "boolean" },
+    title: { type: "string" },
+    era: { type: "string" },
+    prompt: { type: "string" },
+    hints: { type: "array", items: { type: "string" } },
+    layers: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { name: { type: "string" }, ask: { type: "string" }, real: { type: "string" } },
+        required: ["name", "ask", "real"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["supported", "title", "era", "prompt", "hints", "layers"],
+  additionalProperties: false,
+};
 const GEN_VERSION = 2; // bump when the topic prompt changes meaningfully
 const TOPIC_RE = /^[\p{L}\p{N} '’&(),./+-]{3,60}$/u;
 const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
@@ -124,7 +146,7 @@ async function generate(req, context, user) {
   const prompt = `Write a guided-discovery lesson in which the learner INVENTS "${topic}" themselves, step by step, the way engineers (or evolution and medicine) originally worked it out. (They picked the "${FIELD_NAME[field]}" section. Field guidance: ${FIELD_BY_ID[field].guide} If the topic really belongs to another discipline, teach it as it really is.)
 
 First decide if it fits. It must be a real machine, device, structure, engineered or software system, or a system of the human body or a medical technology. Weapons and military equipment ARE allowed (e.g. trebuchet, flintlock, bolt-action rifle, machine gun, tank, naval gun, fighter jet, missile guidance) — teach them like a museum or encyclopedia would: how the mechanism works, why it was designed that way, safety features, and how designs evolved historically.
-Reply with only {"error":"not_supported"} if the topic isn't one of those (e.g. a person, a celebrity, an abstract idea, a request for advice), if it asks for diagnosis, treatment or dosing, if it involves making pathogens or toxins more dangerous, or if it is essentially a request for how to build, manufacture or modify a weapon (e.g. making a gun at home, 3D-printed guns, full-auto conversion, suppressors, ghost guns), explosives, propellants or other energetic materials and their chemistry, improvised weapons, or chemical, biological, nuclear or radiological weapons.
+Set "supported" to false (and leave every other field empty) if the topic isn't one of those (e.g. a person, a celebrity, an abstract idea, a request for advice), if it asks for diagnosis, treatment or dosing, if it involves making pathogens or toxins more dangerous, or if it is essentially a request for how to build, manufacture or modify a weapon (e.g. making a gun at home, 3D-printed guns, full-auto conversion, suppressors, ghost guns), explosives, propellants or other energetic materials and their chemistry, improvised weapons, or chemical, biological, nuclear or radiological weapons.
 For allowed weapon topics, stay at the level of mechanisms and history: never give construction steps, materials, dimensions, tolerances, recipes, or ways to defeat safety or legal controls.
 
 START FROM THE NEED, NOT THE FINISHED THING. The starting "prompt" describes a concrete situation someone faces — the problem this invention solves, before it exists — WITHOUT naming or describing the invention, then asks how the learner would solve it. Never say "you've been handed a ..." or ask them to describe an existing device.
@@ -143,30 +165,42 @@ Layers 2–5 open with "ask": a concrete scenario (max 35 words) that exposes a 
 The lesson is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and work, why designs are chosen, what goes wrong, and how the design evolved from older to modern solutions. Use real engineering history and real component names; if unsure of a date, give an approximate era. Be concise.
 
 Reply with only JSON:
-{"title":"short name","era":"e.g. 1900s → today","prompt":"the need-first starting question, max 60 words","hints":["hint 1","hint 2"],"layers":[{"name":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
+{"supported":true,"title":"short name","era":"e.g. 1900s → today","prompt":"the need-first starting question, max 60 words","hints":["hint 1","hint 2"],"layers":[{"name":"...","ask":"","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
 
   try {
     const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
-    const ask = () => client.messages.create({
-      model: env("GEN_MODEL") || env("MODEL") || "claude-haiku-4-5",
-      max_tokens: 2500,
-      messages: [{ role: "user", content: prompt }],
-    });
-    let response = await ask();
-    const usable = (r) => {
-      const o = parseJson(r.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
-      return o && (o.error || (o.title && o.prompt && Array.isArray(o.layers) && o.layers.length >= 5));
+    const base = { model: env("GEN_MODEL") || env("MODEL") || "claude-haiku-4-5", max_tokens: 2500, messages: [{ role: "user", content: prompt }] };
+    // Structured output makes the API guarantee the lesson's JSON shape. If the model doesn't
+    // support it (400), fall back to asking for JSON in the prompt.
+    let structured = true;
+    const ask = async () => {
+      if (structured) {
+        try { return await client.messages.create({ ...base, output_config: { format: { type: "json_schema", schema: LESSON_SCHEMA } } }); }
+        catch (e) {
+          if (e?.status !== 400) throw e;
+          console.warn("generate: structured output unavailable, falling back", e?.message);
+          structured = false;
+        }
+      }
+      return client.messages.create(base);
     };
+    const textOf = (r) => r.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+    const usable = (r) => {
+      const o = parseJson(textOf(r));
+      return o && (o.error || o.supported === false || (o.title && o.prompt && Array.isArray(o.layers) && o.layers.length >= 5));
+    };
+    let response = await ask();
     if (response.stop_reason !== "refusal" && !usable(response)) {
-      console.warn("generate: unusable answer, retrying once", response.stop_reason);
+      console.warn("generate: unusable answer, retrying once", response.stop_reason, textOf(response).slice(0, 400));
       response = await ask();
+      if (response.stop_reason !== "refusal" && !usable(response)) console.warn("generate: still unusable", response.stop_reason, textOf(response).slice(0, 400));
     }
     if (response.stop_reason === "refusal") {
       await Promise.all(counted.map(unbump));
       return json({ error: "not_supported", message: "That topic isn't one we can write a lesson on. Try a machine or mechanism." }, 422);
     }
     const out = parseJson(response.content.filter((b) => b.type === "text").map((b) => b.text).join(""));
-    if (out?.error) {
+    if (out?.error || out?.supported === false) {
       await Promise.all(counted.map(unbump));
       return json({ error: "not_supported", message: "We can't write that one. Topics need to be a machine or mechanism — weapons are fine at the how-it-works level, but not building, modifying or explosives. Try something like \"bolt-action rifle\" or \"bicycle gears\"." }, 422);
     }
