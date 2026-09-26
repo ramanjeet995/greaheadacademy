@@ -256,19 +256,36 @@ function renderEntry(sys, e) {
   if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)}</span>${esc(sys.layers[e.layer].real)}</div></div>`;
   if (e.type === "ask") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body"><div class="ask" style="margin-top:0;--c:${lvl(e.layer).color}"><span class="tag">Layer ${e.layer + 1} · ${lvl(e.layer).name} — ${esc(sys.layers[e.layer].name)}</span>${esc(askFor(sys, e.layer))}</div></div></div>`;
   if (e.type === "hint") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body hintbox"><span class="tag">Hint</span>${esc(e.text)}</div></div>`;
+  if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body xbody"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words to learn more</span>${linkify(e.text)}</div></div>`;
   if (e.type === "note") return `<p class="err">${esc(e.text)}</p>`;
   if (e.type === "final") return `<div class="msg mentor" style="max-width:none"><div class="who">Mentor · the complete picture</div><div class="final">
       <span class="tag">You've designed the whole system, layer by layer</span>
       <ol>${sys.layers.map((l, i) => `<li style="--c:${lvl(i).color}"><b>Layer ${i + 1} · ${lvl(i).name} — ${esc(l.name)}</b>${esc(l.real)}</li>`).join("")}</ol></div></div>`;
   return "";
 }
+function modeSwitch(s) {
+  const explain = s.mode === "explain";
+  return `<div class="modebar"><div class="modes" role="group" aria-label="How do you want to learn this?">
+      <button data-mode="design" aria-pressed="${!explain}">Design it myself</button>
+      <button data-mode="explain" aria-pressed="${explain}">Explain it to me</button></div>
+    <span class="note">${explain ? "Read each layer explained from scratch. Tap underlined words to dig deeper." : "You describe your design; the mentor compares it with real ones and takes you deeper."}</span></div>`;
+}
+function bindModeSwitch(sys) {
+  document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => {
+    const s = session(sys);
+    if ((s.mode || "design") === b.dataset.mode) return;
+    s.mode = b.dataset.mode; save(); renderSession(sys);
+  }));
+}
 function renderSession(sys) {
   const s = session(sys), L = sys.layers.length;
+  if (s.mode === "explain") return renderExplainMode(sys);
   const list = systemsOf(), idx = list.indexOf(sys);
   const next = list[idx + 1];
   $("sheet").innerHTML = `
     <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
     <h3 class="ptitle">${esc(sys.title)}</h3>
+    ${modeSwitch(s)}
     <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${s.done || i < s.layer ? "done" : i === s.layer ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
     <div class="thread">${s.thread.map((e) => renderEntry(sys, e)).join("")}</div>
     <div id="live"></div>
@@ -278,6 +295,7 @@ function renderSession(sys) {
       <div class="actions">
         <button class="btn primary" id="submitBtn">Submit</button>
         <button class="btn" id="hintBtn">Hint</button>
+        <button class="btn" id="explainBtn">I'm stuck — explain this layer</button>
         <button class="btn" id="revealBtn">Show how real designs do it</button>
       </div>
       <div id="confirmBox"></div>
@@ -293,14 +311,142 @@ function renderSession(sys) {
     $("yesRestart").onclick = () => { delete state.sessions[sys.id]; save(); refresh(sys); };
     $("noRestart").onclick = () => { $("restartBox").innerHTML = ""; };
   };
+  bindModeSwitch(sys);
   if (s.done) return;
   const ta = $("answer");
   ta.value = s.draft || "";
   let tm; ta.oninput = () => { s.draft = ta.value; clearTimeout(tm); tm = setTimeout(() => writeLS("ga-state", state), 400); };
   $("submitBtn").onclick = () => submit(sys);
   $("hintBtn").onclick = () => hint(sys);
+  $("explainBtn").onclick = () => explainHere(sys);
   $("revealBtn").onclick = () => reveal(sys);
 }
+
+// ---------------------------------------------------------------- explanations
+// Text from the server marks linkable terms as [[term]] or [[term|shown text]].
+function linkify(text) {
+  return String(text || "").split(/\n\s*\n/).filter((p) => p.trim()).map((p) =>
+    `<p>${esc(p.trim()).replace(/\[\[([^\[\]|]{1,60})(?:\|([^\[\]]{1,60}))?\]\]/g,
+      (_, term, shown) => `<button type="button" class="term" data-term="${term}">${shown || term}</button>`)}</p>`).join("");
+}
+const layerCache = new Map();
+async function fetchLayerExplanation(sys, layer) {
+  const key = `${sys.id}/${layer}`;
+  if (layerCache.has(key)) return layerCache.get(key);
+  const r = await api("/api/explain", { method: "POST", body: JSON.stringify({ systemId: sys.id, layer }) });
+  layerCache.set(key, r.text);
+  return r.text;
+}
+async function explainHere(sys) {
+  if (busy) return;
+  const s = session(sys);
+  setBusy(true, "Explaining this layer");
+  try {
+    const text = await fetchLayerExplanation(sys, s.layer);
+    push(sys, { type: "explain", layer: s.layer, text });
+  } catch (e) {
+    push(sys, { type: "note", text: e.data?.message || "The explanation didn't come through. Try again." });
+  } finally { setBusy(false); refresh(sys); }
+}
+
+// Explain mode: the layers explained in order, one at a time.
+function renderExplainMode(sys) {
+  const s = session(sys), L = sys.layers.length;
+  s.readUpTo = Math.min(L - 1, Math.max(s.readUpTo || 0, 0));
+  const list = systemsOf(), idx = list.indexOf(sys), next = list[idx + 1];
+  const sections = [];
+  for (let i = 0; i <= s.readUpTo; i++) {
+    const cached = layerCache.get(`${sys.id}/${i}`);
+    sections.push(`<section class="xlayer" style="--c:${lvl(i).color}">
+      <span class="tag">Layer ${i + 1} · ${lvl(i).name} — ${esc(sys.layers[i].name)}</span>
+      <p class="xq">${esc(askFor(sys, i))}</p>
+      <div class="xbody" id="xl-${i}">${cached ? linkify(cached) : `<span class="thinking">Writing the explanation</span>`}</div>
+      <div class="actions"><button class="btn" data-try="${i}">Try this layer myself</button></div>
+    </section>`);
+  }
+  $("sheet").innerHTML = `
+    <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
+    <h3 class="ptitle">${esc(sys.title)}</h3>
+    ${modeSwitch(s)}
+    <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${i < s.readUpTo ? "done" : i === s.readUpTo ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
+    <div class="xlayers">${sections.join("")}</div>
+    <div class="actions" style="margin-top:18px">
+      ${s.readUpTo < L - 1 ? `<button class="btn primary" id="xNext">Next: Layer ${s.readUpTo + 2} · ${esc(sys.layers[s.readUpTo + 1].name)} →</button>`
+        : `<span class="note">That's all five layers — from the first idea to today's designs.</span>`}
+    </div>
+    <div class="pager">
+      <button class="link" id="xDesign">Switch to design mode</button>
+      ${next ? `<a class="btn" href="/s/${next.id}" data-nav="${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="/" data-nav="home">All systems →</a>`}
+    </div>`;
+  bindModeSwitch(sys);
+  $("xDesign").onclick = () => { s.mode = "design"; save(); renderSession(sys); };
+  const nb = $("xNext");
+  if (nb) nb.onclick = () => { s.readUpTo++; save(); renderSession(sys); $(`xl-${s.readUpTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  $("sheet").querySelectorAll("[data-try]").forEach((b) => (b.onclick = () => startDesignAt(sys, +b.dataset.try)));
+  // Fill in any explanations not loaded yet.
+  (async () => {
+    for (let i = 0; i <= s.readUpTo; i++) {
+      if (layerCache.has(`${sys.id}/${i}`)) continue;
+      const box = () => $(`xl-${i}`);
+      try {
+        const text = await fetchLayerExplanation(sys, i);
+        if (box()) box().innerHTML = linkify(text);
+      } catch (e) {
+        if (box()) box().innerHTML = `<p class="err">${esc(e.data?.message || "The explanation didn't come through.")}</p><button class="btn" data-retry>Try again</button>`;
+        box()?.querySelector("[data-retry]")?.addEventListener("click", () => renderSession(sys));
+        break;
+      }
+    }
+  })();
+}
+// Jump from explain mode into design mode at a given layer.
+function startDesignAt(sys, layer) {
+  const s = session(sys);
+  s.mode = "design";
+  if (!s.done && layer > s.layer) {
+    s.layer = layer; s.turns = 0; s.hintIdx = 0;
+    push(sys, { type: "ask", layer });
+  }
+  save(); refresh(sys);
+  $("answer")?.focus();
+}
+
+// The side panel: click a term to open it, click terms inside to go deeper, Back to step out.
+const termCache = new Map();
+let termStack = [];
+document.addEventListener("click", (e) => {
+  const t = e.target.closest(".term");
+  if (!t) return;
+  e.preventDefault();
+  openTerm(t.dataset.term, !t.closest("#explainer"));
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("explainer").hidden) closeTerms(); });
+function openTerm(term, fresh) {
+  termStack = fresh ? [term] : [...termStack, term];
+  showTerm();
+}
+function closeTerms() { $("explainer").hidden = true; termStack = []; }
+async function showTerm() {
+  const panel = $("explainer"), term = termStack[termStack.length - 1];
+  panel.hidden = false;
+  $("xBack").hidden = termStack.length < 2;
+  $("xCrumbs").innerHTML = termStack.map((t, i) => i === termStack.length - 1 ? `<b>${esc(t)}</b>` : esc(t)).join(" › ");
+  $("xTitle").textContent = term;
+  const key = term.toLowerCase();
+  if (termCache.has(key)) { $("xBody").innerHTML = linkify(termCache.get(key)); $("xClose").focus(); return; }
+  $("xBody").innerHTML = `<span class="thinking">Explaining ${esc(term)}</span>`;
+  $("xClose").focus();
+  try {
+    const v = currentView();
+    const r = await api("/api/term", { method: "POST", body: JSON.stringify({ term, systemId: v.type === "sys" ? v.id : undefined }) });
+    termCache.set(key, r.text);
+    if (termStack[termStack.length - 1] === term) $("xBody").innerHTML = linkify(r.text);
+  } catch (e) {
+    if (termStack[termStack.length - 1] === term) $("xBody").innerHTML = `<p class="err">${esc(e.data?.message || "That explanation didn't come through. Try again.")}</p>`;
+  }
+}
+$("xBack").onclick = () => { termStack.pop(); showTerm(); };
+$("xClose").onclick = closeTerms;
 function refresh(sys) {
   const v = currentView();
   renderPath(v); renderAccount();
@@ -309,7 +455,7 @@ function refresh(sys) {
 function push(sys, entry) { session(sys).thread.push(entry); save(); }
 function setBusy(on, label) {
   busy = on;
-  ["submitBtn", "hintBtn", "revealBtn"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
+  ["submitBtn", "hintBtn", "explainBtn", "revealBtn"].forEach((id) => { const b = $(id); if (b) b.disabled = on; });
   const live = $("live");
   if (live) live.innerHTML = on ? `<div class="msg mentor" style="margin-top:16px"><div class="who">Mentor</div><div class="body"><span class="thinking">${esc(label)}</span></div></div>` : "";
 }
@@ -327,6 +473,7 @@ function conversation(sys) {
     if (e.type === "ask") return `Mentor (opened layer ${e.layer + 1}): ` + askFor(sys, e.layer);
     if (e.type === "real") return `Mentor (showed the real design for layer ${e.layer + 1})`;
     if (e.type === "hint") return "Mentor hint: " + e.text;
+    if (e.type === "explain") return `Mentor (explained layer ${e.layer + 1} to the learner in full — they may now paraphrase it; check they understood the mechanism)`;
     return "";
   }).filter(Boolean).join("\n\n");
 }

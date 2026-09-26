@@ -12,6 +12,7 @@ Hosted on **Netlify**: a static site built from `public/`, one **Netlify Functio
 | AI mentor | `claude-haiku-4-5` ($1 / $5 per million input/output tokens). One reply ≈ $0.005, so the default cap of 5 replies per user per day costs at most ~$0.025 per active user per day. |
 | Hard spend ceiling | `GLOBAL_DAILY_REPLIES` (default 1000/day ≈ $5/day worst case). Also set a monthly spend limit in the Anthropic Console. |
 | Free path | Without the AI mentor, learners still get the real-world answer after each layer — costs nothing. |
+| Explain mode & terms | "Explain it to me" mode, the "I'm stuck — explain this layer" button, and clickable terms. Each layer explanation and each term is written once (≈ $0.001–0.003 on Haiku) and cached for everyone, so cost stops growing once content is explained. No sign-in needed; new (uncached) explanations capped at 40 per IP and 3,000 site-wide per day. |
 | Explore any machine | Signed-in learners can type any machine and Claude writes a new 5-layer lesson (≈ $0.01 each on Haiku). Each topic is written once and cached, so the next learner who asks for it costs nothing. Capped at 2 new topics per user per day, 200 site-wide. |
 
 Keep the AI caps low until AdSense shows your real revenue per 1,000 page views, then raise `FREE_DAILY_REPLIES` only as far as revenue covers it.
@@ -106,6 +107,9 @@ The generator uses `claude-opus-5` for quality (a few cents per system) with ser
 | `IP_DAILY_REPLIES` | 15 | Per IP address per day — stops one person farming usernames |
 | `GLOBAL_DAILY_REPLIES` | 1000 | Whole-site ceiling per day |
 | `SIGNUPS_PER_IP_DAILY` | 5 | New usernames per IP per day |
+| `EXPLAIN_MODEL` | `MODEL` | Model that writes layer and term explanations |
+| `EXPLAIN_IP_DAILY` | 40 | New (uncached) explanations per IP per day |
+| `EXPLAIN_GLOBAL_DAILY` | 3000 | New explanations site-wide per day |
 | `GEN_MODEL` | `MODEL` | Model that writes explored topics |
 | `GEN_DAILY` | 2 | New topics per user per day (cached topics are free) |
 | `GEN_IP_DAILY` | 4 | New topics per IP per day |

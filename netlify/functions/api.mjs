@@ -32,6 +32,8 @@ async function route(req, context, url) {
   if (p === "/api/config" && method === "GET") return json({ freeDaily: limit(env("FREE_DAILY_REPLIES"), 5) });
   if (p === "/api/login" && method === "POST") return login(req, context);
   const topicMatch = p.match(/^\/api\/topic\/(x-[a-z0-9-]+)$/);
+  if (p === "/api/explain" && method === "POST") return explainLayer(req, context);
+  if (p === "/api/term" && method === "POST") return explainTerm(req, context);
   if (topicMatch && method === "GET") {
     const system = await store("topics").get(topicMatch[1], { type: "json" });
     return system ? json({ system }) : json({ error: "not_found" }, 404);
@@ -317,6 +319,93 @@ async function remaining(username) {
 }
 
 // ---------------------------------------------------------------- helpers
+// ---- explanations for beginners. No sign-in needed: each layer and each term is written once
+// and cached for everyone, and only uncached writes count against the per-IP and site-wide limits.
+const EXPLAIN_RULES = `Write for a complete beginner: plain words, short sentences, no maths, formulas or numbers-heavy specs. Use an everyday comparison where it helps. Wrap the key technical terms a beginner might not know in double square brackets exactly as written in the sentence, e.g. [[steering knuckle]] or [[tie rod|tie rods]] (term|text shown). Separate paragraphs with a blank line. Plain text only — no headings, lists markup, or bold. Weapons and military systems: explain mechanisms and history like a museum would; never construction steps, materials, dimensions, recipes, explosive or propellant chemistry, or ways to modify a weapon or defeat safety or legal controls.`;
+
+async function explainLayer(req, context) {
+  const body = await req.json().catch(() => ({}));
+  const sys = await getSystem(body.systemId);
+  const layer = Number.isInteger(body.layer) ? body.layer : -1;
+  if (!sys || layer < 0 || layer >= sys.layers.length) return json({ error: "bad_request" }, 400);
+  const cache = store("explain");
+  const key = `${sys.id}/${layer}`;
+  const cached = await cache.get(key);
+  if (cached) return json({ text: cached, cached: true });
+
+  const quota = await spendExplainQuota(req, context);
+  if (quota.blocked) return quota.blocked;
+  const l = sys.layers[layer];
+  const prompt = `${EXPLAIN_RULES}
+
+Explain layer ${layer + 1} of 5 (${LEVELS[layer]} level) of how a ${sys.title} works: "${l.name}".
+The question this layer answers: ${layer === 0 ? sys.prompt : l.ask}
+How real designs do it (expand this for a beginner, keep it accurate): ${l.real}
+${layer > 0 ? `Earlier layers covered: ${sys.layers.slice(0, layer).map((x) => x.name).join("; ")}.` : ""}
+
+Write 150–250 words in 2–4 short paragraphs: what problem this layer solves, the parts involved and how they move, and why engineers chose this approach. Link 4–8 terms.`;
+  return writeExplanation(cache, key, prompt, 700, quota.counted);
+}
+
+const TERM_RE = /^[\p{L}\p{N} '’&(),./+-]{2,60}$/u;
+async function explainTerm(req, context) {
+  const body = await req.json().catch(() => ({}));
+  const term = String(body.term || "").trim().replace(/\s+/g, " ");
+  if (!TERM_RE.test(term)) return json({ error: "bad_term" }, 400);
+  const cache = store("terms");
+  const key = slugify(term);
+  if (!key) return json({ error: "bad_term" }, 400);
+  const cached = await cache.get(key);
+  if (cached) return json({ text: cached, cached: true });
+
+  const quota = await spendExplainQuota(req, context);
+  if (quota.blocked) return quota.blocked;
+  const sys = await getSystem(body.systemId);
+  const prompt = `${EXPLAIN_RULES}
+
+Explain the engineering term "${term}"${sys ? ` (it came up while learning how a ${sys.title} works — but explain it in general, not only for that machine)` : ""}.
+Write 80–150 words in 1–2 short paragraphs: what it is, what it does, where you'd find it, and a simple comparison. Link 2–5 related terms. Don't repeat the term as a title.`;
+  return writeExplanation(cache, key, prompt, 450, quota.counted);
+}
+
+async function spendExplainQuota(req, context) {
+  const d = day();
+  const keys = [
+    [`${d}/exip/${clientIp(req, context)}`, limit(env("EXPLAIN_IP_DAILY"), 40)],
+    [`${d}/exglobal`, limit(env("EXPLAIN_GLOBAL_DAILY"), 3000)],
+  ];
+  const counted = [];
+  for (const [k, max] of keys) {
+    const n = await bump(k);
+    counted.push(k);
+    if (n > max) {
+      await Promise.all(counted.map(unbump));
+      return { blocked: json({ error: "quota", message: "Explanations are at their daily limit. Anything already explained still opens — try again tomorrow for new ones." }, 429) };
+    }
+  }
+  return { counted };
+}
+
+async function writeExplanation(cache, key, prompt, maxTokens, counted) {
+  try {
+    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const response = await client.messages.create({
+      model: env("EXPLAIN_MODEL") || env("MODEL") || "claude-haiku-4-5",
+      max_tokens: maxTokens,
+      messages: [{ role: "user", content: prompt }],
+    });
+    if (response.stop_reason === "refusal") throw new Error("refusal");
+    const text = response.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim().slice(0, 4000);
+    if (!text) throw new Error("empty");
+    await cache.set(key, text);
+    return json({ text });
+  } catch (e) {
+    console.error("explain failed", e?.message || e);
+    await Promise.all(counted.map(unbump));
+    return json({ error: "explain_failed", message: "The explanation didn't come through. Try again." }, 502);
+  }
+}
+
 async function getCount(k) {
   const n = await store("counters").get(k);
   return n ? Number(n) || 0 : 0;
