@@ -189,7 +189,7 @@
   "field": "electromechanical",
   "title": "Elevator",
   "era": "1850s → today",
-  "prompt": "It's the 1850s. Platforms that lift goods and people hang from a single rope. If the rope breaks, everyone falls — so nobody will ride. How would you lift the platform, and make it safe even if the rope breaks, with no power and no operator?",
+  "prompt": "It's the 1850s. Platforms that lift goods and people hang from a single rope. If the rope breaks, everyone falls — so nobody will ride. How would you lift the platform — and make it stop by itself if the rope breaks, without anyone pressing anything and without needing power for the safety catch?",
   "hints": [
    "What changes the instant a rope breaks? Could that change itself trigger a safety device?",
    "What runs the full height of the shaft that the platform could grab onto?"

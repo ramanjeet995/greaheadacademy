@@ -331,6 +331,11 @@ function renderHome() {
 function renderEntry(sys, e) {
   if (e.type === "problem") return `<div class="msg mentor"><div class="who">Mentor · Layer 1 · ${lvl(0).name}</div><div class="body"><p>${esc(sys.prompt)}</p><p class="note">No calculations needed — describe the parts, how they connect and move, and why.</p><p class="note">${pathNote()}</p></div></div>`;
   if (e.type === "answer") return `<div class="msg you"><div class="who">You · Layer ${e.layer + 1}</div><div class="body">${esc(e.text)}</div></div>`;
+  if (e.type === "feedback" && e.action === "answer") {
+    return `<div class="msg mentor"><div class="who">Mentor · answering your question</div><div class="body">
+      <p>${esc(e.compare)}</p>
+      <div class="ask deeper"><span class="tag">Next question</span>${esc(e.question)}</div></div></div>`;
+  }
   if (e.type === "feedback") {
     const v = e.verdict === "solid" ? "v-solid" : e.verdict === "partial" ? "v-partial" : "v-off";
     const li = (a) => (Array.isArray(a) && a.length ? a : ["—"]).map((x) => `<li>${esc(x)}</li>`).join("");
@@ -689,7 +694,7 @@ function conversation(sys) {
   return session(sys).thread.slice(-14).map((e) => {
     if (e.type === "problem") return "Mentor: [asked the starting question]";
     if (e.type === "answer") return `Learner (layer ${e.layer + 1}): ` + e.text.slice(0, 2000);
-    if (e.type === "feedback") return "Mentor: " + e.compare + " → " + e.question;
+    if (e.type === "feedback") return (e.action === "answer" ? "Mentor (answered their question): " : "Mentor: ") + e.compare + " → " + e.question;
     if (e.type === "ask") return `Mentor (opened layer ${e.layer + 1}): ` + askFor(sys, e.layer);
     if (e.type === "real") return `Mentor (showed the real design for layer ${e.layer + 1})`;
     if (e.type === "hint") return "Mentor hint: " + e.text;
@@ -716,13 +721,13 @@ async function submit(sys) {
     const r = await api("/api/mentor", { method: "POST", body: JSON.stringify({ systemId: sys.id, kind: "answer", layer: s.layer, turns: s.turns, conversation: convo, answer: text }) });
     auth.remaining = r.remaining; writeLS("ga-auth", auth);
     const last = s.layer === sys.layers.length - 1;
-    let action = r.result.action;
+    let action = r.result.action; // "answer" = they asked something: explained, not graded
     if (action === "finish" && !last) action = "advance";
     if (action === "advance" && last) action = "finish";
     if ((action === "deeper" || action === "fix") && s.turns >= 3) action = last ? "finish" : "advance";
     const entry = { type: "feedback", ...r.result, action };
     if (action === "advance") { entry.nextLayer = s.layer + 1; s.layer++; s.turns = 0; s.hintIdx = 0; }
-    else if (action !== "finish") s.turns++;
+    else if (action !== "finish" && action !== "answer") s.turns++;
     push(sys, entry);
     if (action === "finish") { s.done = true; push(sys, { type: "final" }); }
   } catch (e) {

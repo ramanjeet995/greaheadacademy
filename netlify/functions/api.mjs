@@ -339,21 +339,25 @@ ${answer}
 """
 
 How to respond:
-1. If their answer contains a question, or says they don't understand something (including the wording of your question), answer that FIRST, plainly and briefly, at the start of "compare" — never ignore it.
-2. Judge at THIS layer's level (${LEVELS[layer]}). Layer 1 only needs the basic idea; don't hold them back for details a later layer covers. Credit what's right before what's missing, and be encouraging.
-3. Be accurate and concrete: talk only about parts this system really has (don't invent parts such as wheels a tracked vehicle doesn't have), and describe any situation so a beginner can picture it.
-4. Ask ONE short, clearly worded question.
+1. If their message is MAINLY a question or a request to explain something (e.g. "I don't understand…", "explain what happens to…"), choose "answer": explain it directly and simply in "compare" (2–5 sentences), leave "holds" and "gaps" empty, set "verdict" to "none", and make "question" one simple follow-up about this layer. Don't grade it.
+2. If their answer ALSO contains a question, answer that question first, briefly, at the start of "compare" — never ignore it.
+3. The era in the lesson is background, not a trap. Don't penalise technology that existed in that era, and don't read the setup too literally (e.g. "no power" in a safety question means the SAFETY DEVICE must work without power, not that the whole machine has none). If they propose something a later layer or modern design uses, recognise it ("that's what engineers adopted later"), credit it, and steer back to this layer's question.
+4. Facts: base any correction ONLY on the "Real designs" notes above. Don't add technical claims beyond them unless you're certain, and never invent failure modes or parts the system doesn't have.
+5. Judge at THIS layer's level (${LEVELS[layer]}). Layer 1 only needs the basic idea. "gaps" lists at most 3 things, and only things THIS layer covers — never count something a later layer covers as missing.
+6. Verdict: "solid" when the core idea of this layer is there, even if details are missing; "partial" only when a core idea of this layer is missing or wrong; "off-track" when the approach wouldn't work. Credit what's right before what's missing, and be encouraging.
+7. Ask exactly ONE question, in one sentence a beginner can picture — never two questions joined with "and".
 
-Compare their method with how real designs do it at THIS layer, then choose ONE action:
+Choose ONE action:
+- "answer": see rule 1.
 - "deeper": their idea for this layer is right. Ask ONE question that goes deeper into the specific mechanism THEY described, staying on this layer.
 - "fix": a core idea of this layer is missing or wrong. Ask ONE pointed question that leads them to it, without giving it away.
-- "advance": they have the essentials of this layer (a different but workable method counts — say so). Prefer "advance" over "deeper" once the core idea is there. ${last ? `This is the last layer, so use "finish" instead.` : `Open layer ${layer + 2} (${sys.layers[layer + 1].name}) with its opening question, reworded to build on THEIR design.`}
+- "advance": they have the essentials of this layer (a different but workable method counts — say so). Prefer "advance" over "deeper" once the core idea is there. ${last ? `This is the last layer, so use "finish" instead.` : `Open layer ${layer + 2} (${sys.layers[layer + 1].name}) with its opening question, reworded to build on THEIR design — still ONE question.`}
 - "finish": only on the last layer, when the essentials are there. "question" is then a 1–2 sentence wrap-up of the system they designed.
-${turns >= 2 ? `They have already had ${turns} exchanges on this layer: choose "${last ? "finish" : "advance"}" now, and state the real-world approach plainly in "compare".` : ""}
+${turns >= 2 ? `They have already had ${turns} graded exchanges on this layer: unless their message is mainly a question, choose "${last ? "finish" : "advance"}" now, and state the real-world approach plainly in "compare".` : ""}
 Keep "compare" to 2–4 sentences (plus the answer to their question, if they asked one).
 
 Reply with only JSON:
-{"action":"deeper"|"fix"|"advance"|"finish","verdict":"solid"|"partial"|"off-track","compare":"...","holds":["..."],"gaps":["..."],"question":"..."}`;
+{"action":"answer"|"deeper"|"fix"|"advance"|"finish","verdict":"solid"|"partial"|"off-track"|"none","compare":"...","holds":["..."],"gaps":["..."],"question":"..."}`;
 
   try {
     const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
@@ -387,8 +391,8 @@ ${task}`,
     const list = (a) => (Array.isArray(a) ? a.slice(0, 5).map((x) => String(x).slice(0, 300)) : []);
     return json({
       result: {
-        action: ["deeper", "fix", "advance", "finish"].includes(out.action) ? out.action : "deeper",
-        verdict: ["solid", "partial", "off-track"].includes(out.verdict) ? out.verdict : "partial",
+        action: ["answer", "deeper", "fix", "advance", "finish"].includes(out.action) ? out.action : "deeper",
+        verdict: ["solid", "partial", "off-track", "none"].includes(out.verdict) ? out.verdict : "partial",
         compare: out.compare.slice(0, 1200), holds: list(out.holds), gaps: list(out.gaps), question: out.question.slice(0, 1200),
       },
       remaining: left,
@@ -448,7 +452,7 @@ The learner has a QUESTION — this is not an answer to grade and must not move 
 ${question}
 """
 
-Answer it for a beginner in 60–180 words: plain words, short sentences, an everyday comparison if it helps, relating it to their design and this layer where you can. Don't give away the answer to the current layer's open question unless they explicitly ask for it — if the question would reveal it, give a helpful nudge instead and mention they can press "Show how real designs do it". If the question isn't about this topic or learning engineering, science or how things work, say briefly that you can only help with this topic. Wrap 1–4 key technical terms in double square brackets, e.g. [[pinion]]. Plain text only, blank line between paragraphs.`,
+Base factual claims on the "Real designs" notes above; don't invent parts or failure modes. Answer it for a beginner in 60–180 words: plain words, short sentences, an everyday comparison if it helps, relating it to their design and this layer where you can. Don't give away the answer to the current layer's open question unless they explicitly ask for it — if the question would reveal it, give a helpful nudge instead and mention they can press "Show how real designs do it". If the question isn't about this topic or learning engineering, science or how things work, say briefly that you can only help with this topic. Wrap 1–4 key technical terms in double square brackets, e.g. [[pinion]]. Plain text only, blank line between paragraphs.`,
       }],
     });
     if (response.stop_reason === "refusal") throw new Error("refusal");
