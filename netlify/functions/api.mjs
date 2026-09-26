@@ -16,6 +16,14 @@ const MAX_ANSWER_CHARS = 2500;
 const MAX_CONVERSATION_CHARS = 8000;
 
 const store = (name) => getStore({ name, consistency: "strong" });
+// A real Anthropic key (sk-ant-…) always goes straight to Anthropic. Netlify's AI Gateway can set
+// ANTHROPIC_BASE_URL to its own address; sending our own key there is rejected with a 401.
+// With no own key, the gateway's injected key and base URL are used as-is.
+const ownKey = () => /^sk-ant-/.test(String(process.env.ANTHROPIC_API_KEY || "").trim());
+function makeClient() {
+  const apiKey = String(process.env.ANTHROPIC_API_KEY || "").trim();
+  return new Anthropic({ apiKey, ...(ownKey() ? { baseURL: "https://api.anthropic.com" } : {}) });
+}
 // Usernames with no per-user/per-IP AI limits: config/unlimited-users.json plus the optional
 // UNLIMITED_USERS env var (comma-separated). The site-wide daily cap still applies to them.
 const isUnlimited = (username) => [...UNLIMITED_USERS, ...String(process.env.UNLIMITED_USERS || "").split(",")]
@@ -44,6 +52,8 @@ async function route(req, context, url) {
     pinPepperPresent: Boolean(env("PIN_PEPPER")),
     model: env("MODEL") || "claude-haiku-4-5",
     mentorModel: mentorModel(),
+    aiRoute: ownKey() ? "your Anthropic key → api.anthropic.com" : env("ANTHROPIC_BASE_URL") ? "Netlify AI Gateway" : "none",
+    gatewayBaseUrlSet: Boolean(env("ANTHROPIC_BASE_URL")),
     deployId: env("DEPLOY_ID") || null,
     context: env("CONTEXT") || null,
   });
@@ -179,7 +189,7 @@ Reply with only JSON:
 {"supported":true,"title":"short name","era":"e.g. 1900s → today","prompt":"the need-first starting question, max 60 words","hints":["hint 1","hint 2"],"layers":[{"name":"...","ask":"","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
 
   try {
-    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const client = makeClient();
     const base = { model: env("GEN_MODEL") || env("MODEL") || "claude-haiku-4-5", max_tokens: 2500, messages: [{ role: "user", content: prompt }] };
     // Structured output makes the API guarantee the lesson's JSON shape. If the model doesn't
     // support it (400), fall back to asking for JSON in the prompt.
@@ -365,7 +375,7 @@ Reply with only JSON:
 {"action":"answer"|"deeper"|"fix"|"advance"|"finish","verdict":"solid"|"partial"|"off-track"|"none","compare":"...","holds":["..."],"gaps":["..."],"question":"..."}`;
 
   try {
-    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const client = makeClient();
     const response = await client.messages.create({
       model: mentorModel(),
       max_tokens: kind === "hint" ? 300 : 1200,
@@ -439,7 +449,7 @@ async function askQuestion(req, context, user) {
     }
   }
   try {
-    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const client = makeClient();
     const response = await client.messages.create({
       model: mentorModel(),
       max_tokens: 600,
@@ -603,7 +613,7 @@ async function spendExplainQuota(req, context) {
 
 async function writeExplanation(cache, key, prompt, maxTokens, counted) {
   try {
-    const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
+    const client = makeClient();
     const response = await client.messages.create({
       model: env("EXPLAIN_MODEL") || env("MODEL") || "claude-haiku-4-5",
       max_tokens: maxTokens,
