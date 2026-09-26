@@ -71,6 +71,11 @@ aside.path{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);max-hei
 .askq .row{display:flex;gap:6px}
 .askq input{flex:1;min-width:0;font:15px var(--body);padding:10px 12px;border:1px solid var(--rule);border-radius:4px;background:var(--panel);color:var(--ink)}
 .msg.you.q .body{background:var(--paper);border:1px dashed var(--accent)}
+.btn.mic{display:inline-flex;gap:6px;align-items:center}
+.btn.mic[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff;animation:micpulse 1.2s ease-in-out infinite}
+@keyframes micpulse{50%{box-shadow:0 0 0 4px rgba(180,35,24,.25)}}
+@media (prefers-reduced-motion: reduce){.btn.mic[aria-pressed="true"]{animation:none}}
+.micnote:empty{display:none}
 .aistatus{font-size:13px;color:var(--muted);display:flex;gap:8px;align-items:flex-start}
 .aistatus b{color:var(--ink)}
 .aistatus .toggle{display:flex;gap:8px;align-items:flex-start;cursor:pointer}

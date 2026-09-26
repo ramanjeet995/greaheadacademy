@@ -416,11 +416,13 @@ function renderSession(sys) {
       <label for="answer">Your answer · Layer ${s.layer + 1} of ${L}</label>
       <textarea id="answer" maxlength="2500" placeholder="Describe your method: which parts, how they connect, how they move, and why."></textarea>
       <div class="actions">
+        ${micButton("answer")}
         <button class="btn primary" id="submitBtn">Submit</button>
         <button class="btn" id="hintBtn">Hint</button>
         <button class="btn" id="explainBtn">I'm stuck — explain this layer</button>
         <button class="btn" id="revealBtn">Show how real designs do it</button>
       </div>
+      ${micNote("answer")}
       <div class="aistatus" id="aiStatus">${aiStatusHtml()}</div>
       <div id="confirmBox"></div>
     </div>`}
@@ -642,7 +644,9 @@ function askBoxHtml() {
   return `<div class="askq">
     <label for="qInput">Question about the explanation? Ask the mentor — it won't count as your answer.</label>
     <div class="row"><input type="text" id="qInput" maxlength="600" placeholder="e.g. What does “caster” mean here?" ${blocked ? "disabled" : ""}>
+    ${blocked ? "" : micButton("qInput")}
     <button class="btn" type="button" id="qBtn" ${blocked ? "disabled" : ""}>Ask</button></div>
+    ${blocked ? "" : micNote("qInput")}
     <span class="note" id="qMsg">${blocked || `Uses 1 AI reply (${repliesLeft()}).`}</span></div>`;
 }
 function bindAskBox(sys) {
@@ -656,6 +660,7 @@ function bindAskBox(sys) {
 }
 async function askMentor(sys, raw) {
   if (busy) return;
+  stopMic();
   const question = String(raw || "").trim();
   if (question.length < 3) { $("qMsg").textContent = "Type a question first."; $("qInput").focus(); return; }
   const s = session(sys);
@@ -708,6 +713,7 @@ const useAi = () => !!auth && state.aiOn && (auth.remaining ?? 1) > 0;
 
 async function submit(sys) {
   if (busy) return;
+  stopMic();
   const s = session(sys), ta = $("answer"), text = ta.value.trim();
   if (!text) { $("confirmBox").innerHTML = `<p class="err">Describe your idea first — rough is fine.</p>`; ta.focus(); return; }
   const convo = conversation(sys);
@@ -774,6 +780,80 @@ function reveal(sys) {
   }
   push(sys, { type: "real", layer: s.layer });
   nextLayer(sys); refresh(sys);
+}
+
+// ---------------------------------------------------------------- voice input
+// Uses the browser's own speech recognition (Chrome, Edge, Safari): free, no server involved.
+// The words land in the text box so the learner can fix mistakes before submitting.
+const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, recTarget = null;
+const MIC_SVG = `<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>`;
+function micButton(target) {
+  if (!SpeechRec) return "";
+  const on = recTarget === target;
+  return `<button type="button" class="btn mic" data-mic="${target}" aria-pressed="${on}" title="Speak instead of typing">${MIC_SVG}<span>${on ? "Stop" : "Speak"}</span></button>`;
+}
+const micNote = (target) => (SpeechRec ? `<span class="note micnote" id="mic-note-${target}" aria-live="polite"></span>` : "");
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-mic]");
+  if (!b) return;
+  e.preventDefault();
+  toggleMic(b.dataset.mic);
+});
+function setMicUi(target, on, note) {
+  document.querySelectorAll(`[data-mic="${target}"]`).forEach((b) => {
+    b.setAttribute("aria-pressed", String(on));
+    const label = b.querySelector("span");
+    if (label) label.textContent = on ? "Stop" : "Speak";
+  });
+  const n = $(`mic-note-${target}`);
+  if (n && note !== undefined) n.textContent = note;
+}
+function stopMic() { if (rec) rec.stop(); }
+function toggleMic(target) {
+  if (rec) {
+    const same = recTarget === target;
+    rec.stop();
+    if (same) return;
+  }
+  const r = new SpeechRec();
+  r.lang = navigator.language || "en-US";
+  r.continuous = true;
+  r.interimResults = true;
+  let failed = false;
+  r.onresult = (ev) => {
+    const el = $(target);
+    if (!el) return;
+    let finalText = "", interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) finalText += t; else interim += t;
+    }
+    if (finalText.trim()) {
+      el.value = (el.value.trim() ? el.value.replace(/\s*$/, " ") : "") + finalText.trim();
+      el.dispatchEvent(new Event("input")); // saves the draft
+    }
+    setMicUi(target, true, interim ? `Hearing: “${interim.trim()}”` : "Listening… press Stop when you're done.");
+  };
+  r.onerror = (ev) => {
+    failed = true;
+    const msg = {
+      "not-allowed": "Microphone blocked — allow it for this site in your browser's settings, then try again.",
+      "service-not-allowed": "Voice input isn't allowed in this browser. You can still type.",
+      "no-speech": "Didn't catch anything — try again, a little closer to the microphone.",
+      "audio-capture": "No microphone found.",
+      "network": "Voice input needs an internet connection.",
+    }[ev.error] || "Voice input stopped.";
+    setMicUi(target, false, msg);
+  };
+  r.onend = () => {
+    if (rec === r) { rec = null; recTarget = null; }
+    setMicUi(target, false, failed ? undefined : "");
+  };
+  rec = r; recTarget = target;
+  setMicUi(target, true, "Listening… press Stop when you're done.");
+  try { r.start(); }
+  catch { rec = null; recTarget = null; setMicUi(target, false, "Couldn't start voice input."); }
 }
 
 // ---------------------------------------------------------------- ads (only when configured by the server)
