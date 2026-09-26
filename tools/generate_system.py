@@ -28,6 +28,9 @@ PROMPT = """Build a guided-discovery lesson for {field} engineers on the system 
 It is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and move,
 why designs are chosen, what goes wrong, and how the design evolved. Use real engineering history and
 real component names. Be accurate; if unsure of an exact date, give an approximate era.
+Weapons and military systems are fine at the level of how the mechanism works and how it evolved
+(like a museum or encyclopedia) — never construction steps, materials, dimensions, recipes, explosive or
+propellant chemistry, or ways to modify a weapon or defeat safety or legal controls.
 
 Write exactly 5 layers, going deeper and from older to modern solutions:
 1 (Student): the basic layout — the parts and how they connect.

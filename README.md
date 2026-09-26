@@ -32,6 +32,8 @@ tools/generate_system.py   write new systems with Claude (one-time cost per syst
 
 API: `POST /api/login` (username + PIN; unknown usernames are created), `GET/PUT /api/progress`, `GET /api/me`, `POST /api/mentor`, `POST /api/generate` (write a lesson for a typed topic), `GET /api/topic/:id` (a generated topic, for shared links), `POST /api/logout`, `GET /api/config`.
 
+**Weapons policy.** Weapons and military systems (trebuchet, flintlock, bolt-action rifle, tank, missile guidance…) are allowed at the how-it-works and history level. The generator and the mentor both decline building, manufacturing or modifying weapons, explosives and propellant chemistry, improvised weapons, and chemical/biological/nuclear/radiological weapons. This also keeps the site within AdSense's publisher policies, which prohibit ads next to weapon-making instructions — review weapon lessons before promoting them to permanent pages.
+
 Generated topics live in the `topics` Blobs store and open at `/s/x-<slug>`. They aren't in the sitemap and aren't reviewed. To make a good one a permanent, indexed page, review it and add it to `public/systems.json` (or regenerate it with `tools/generate_system.py`).
 
 ## Deploy
