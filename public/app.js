@@ -120,7 +120,7 @@ function renderAccount() {
       <label class="toggle"><input type="checkbox" id="aiToggle" ${state.aiOn ? "checked" : ""}> Use the AI mentor</label>
       <div class="note">AI replies left today: <b>${auth.remaining ?? "–"}</b> of ${freeDaily}. Without the AI mentor you still get the real-world answer after each layer.</div>
       <button class="link" id="logoutBtn" style="justify-self:start">Sign out</button>`;
-    $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); };
+    $("aiToggle").onchange = (e) => { state.aiOn = e.target.checked; save(); renderAll(false); };
     $("logoutBtn").onclick = async () => { try { await api("/api/logout", { method: "POST" }); } catch {} auth = null; writeLS("ga-auth", null); renderAll(false); };
   } else {
     box.innerHTML = `<form id="loginForm">
@@ -298,7 +298,7 @@ function renderEntry(sys, e) {
       <div class="cols"><div class="got"><h6>Holds up</h6><ul>${li(e.holds)}</ul></div><div class="miss"><h6>Missing or different</h6><ul>${li(e.gaps)}</ul></div></div>
       <div class="ask ${kind[0]}" ${next != null && e.action === "advance" ? `style="--c:${lvl(next).color}"` : ""}><span class="tag">${kind[1]}</span>${esc(e.question)}</div></div></div>`;
   }
-  if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)}</span>${esc(sys.layers[e.layer].real)}</div></div>`;
+  if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)} · built-in answer</span>${esc(sys.layers[e.layer].real)}</div></div>`;
   if (e.type === "ask") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body"><div class="ask" style="margin-top:0;--c:${lvl(e.layer).color}"><span class="tag">Layer ${e.layer + 1} · ${lvl(e.layer).name} — ${esc(sys.layers[e.layer].name)}</span>${esc(askFor(sys, e.layer))}</div></div></div>`;
   if (e.type === "hint") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body hintbox"><span class="tag">Hint</span>${esc(e.text)}</div></div>`;
   if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words, or select a hard passage to simplify it</span><div class="xbody" data-src="layer:${sys.id}:${e.layer}">${linkify(e.text)}</div></div></div>`;
@@ -368,6 +368,7 @@ function renderSession(sys) {
         <button class="btn" id="explainBtn">I'm stuck — explain this layer</button>
         <button class="btn" id="revealBtn">Show how real designs do it</button>
       </div>
+      <div class="aistatus" id="aiStatus">${aiStatusHtml()}</div>
       <div id="confirmBox"></div>
     </div>`}
     <div class="pager">
@@ -390,6 +391,7 @@ function renderSession(sys) {
   $("hintBtn").onclick = () => hint(sys);
   $("explainBtn").onclick = () => explainHere(sys);
   $("revealBtn").onclick = () => reveal(sys);
+  bindAiStatus(sys);
 }
 
 // ---------------------------------------------------------------- explanations
@@ -564,6 +566,20 @@ $("simplifyBtn").onclick = () => {
   // From the page: start a fresh panel. From inside the panel: go one level deeper (Back returns).
   openPanel({ kind: "simplify", ...rest }, !inPanel);
 };
+// Right under Submit: which path the next answer takes, and the switch to change it.
+function aiStatusHtml() {
+  if (!auth) return `<span class="dot off"></span><span><b>AI mentor off.</b> You'll see the built-in answer instead of feedback on your own design.
+    <button class="link" type="button" id="aiSignIn">Sign in to turn it on</button> — any username and PIN, free.</span>`;
+  if ((auth.remaining ?? 1) <= 0) return `<span class="dot off"></span><span><b>AI mentor: no replies left today.</b> You'll see the built-in answer until tomorrow.</span>`;
+  return `<label class="toggle"><input type="checkbox" id="aiToggleInline" ${state.aiOn ? "checked" : ""}>
+    <span><b>AI mentor ${state.aiOn ? "on" : "off"}</b> — ${state.aiOn ? `feedback on your own design (${auth.remaining ?? "–"} of ${freeDaily} replies left today)` : "you'll see the built-in answer instead"}</span></label>`;
+}
+function bindAiStatus(sys) {
+  const t = $("aiToggleInline");
+  if (t) t.onchange = (e) => { state.aiOn = e.target.checked; save(); refresh(sys); };
+  const si = $("aiSignIn");
+  if (si) si.onclick = () => { const u = $("uName"); u?.scrollIntoView({ behavior: "smooth", block: "center" }); u?.focus(); };
+}
 function refresh(sys) {
   const v = currentView();
   renderPath(v); renderAccount();
