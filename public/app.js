@@ -151,7 +151,11 @@ function mergeProgress(server) {
   if (!server) return;
   const score = (s) => (s ? (s.done ? 1000 : 0) + s.layer * 50 + (s.thread?.length || 0) : -1);
   for (const [id, s] of Object.entries(server.sessions || {})) if (score(s) > score(state.sessions[id])) state.sessions[id] = s;
-  for (const sys of server.custom || []) if (!byId(sys.id)) state.custom.push(sys);
+  for (const sys of server.custom || []) {
+    const i = state.custom.findIndex((x) => x.id === sys.id);
+    if (i < 0) state.custom.push(sys);
+    else if ((sys.v || 1) > (state.custom[i].v || 1)) state.custom[i] = sys;
+  }
 }
 function renderPath(v) {
   const item = (s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${v.type === "sys" && v.id === s.id ? `aria-current="page"` : ""}>
@@ -193,7 +197,10 @@ async function explore(where) {
   try {
     const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic, field: state.field }) });
     const sys = r.system;
-    if (!byId(sys.id)) { state.custom.push(sys); save(); }
+    const i = state.custom.findIndex((x) => x.id === sys.id);
+    if (i < 0) state.custom.push(sys);
+    else if ((state.custom[i].v || 1) !== (sys.v || 1)) { state.custom[i] = sys; delete state.sessions[sys.id]; } // rewritten lesson
+    save();
     go({ type: "sys", id: sys.id });
   } catch (e) {
     msg.textContent = e.data?.message || "Couldn't write that lesson. Try again.";
@@ -270,6 +277,31 @@ function modeSwitch(s) {
       <button data-mode="explain" aria-pressed="${explain}">Explain it to me</button></div>
     <span class="note">${explain ? "Read each layer explained from scratch. Tap underlined words to dig deeper, or select a hard passage to have it explained more simply." : "You describe your design; the mentor compares it with real ones and takes you deeper."}</span></div>`;
 }
+// Topics written with an older version of the lesson prompt can be rewritten in place.
+const CURRENT_TOPIC_VERSION = 2;
+function outdatedBanner(sys) {
+  if (!sys.custom || (sys.v || 1) >= CURRENT_TOPIC_VERSION) return "";
+  return `<div class="confirm" style="margin:0 0 14px">This lesson was written in an older format that doesn't start from the problem it solves.
+    <button class="btn primary" id="rewriteBtn" type="button">Rewrite this lesson</button><span class="note" id="rewriteMsg">${auth ? "Uses 1 of today's new-topic allowance and restarts this topic." : "Sign in first."}</span></div>`;
+}
+function bindOutdated(sys) {
+  const b = $("rewriteBtn");
+  if (!b) return;
+  b.onclick = async () => {
+    const msg = $("rewriteMsg");
+    if (!auth) { msg.textContent = "Sign in on the left first."; return; }
+    b.disabled = true;
+    msg.innerHTML = `<span class="thinking">Rewriting</span>`;
+    try {
+      const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic: sys.topic || sys.title, field: sys.field }) });
+      const i = state.custom.findIndex((x) => x.id === sys.id);
+      if (r.system.id === sys.id && i >= 0) { state.custom[i] = r.system; delete state.sessions[sys.id]; }
+      else if (!byId(r.system.id)) state.custom.push(r.system);
+      save();
+      go({ type: "sys", id: r.system.id });
+    } catch (e) { msg.textContent = e.data?.message || "Couldn't rewrite it. Try again."; b.disabled = false; }
+  };
+}
 function bindModeSwitch(sys) {
   document.querySelectorAll(".modes button").forEach((b) => (b.onclick = () => {
     const s = session(sys);
@@ -285,7 +317,7 @@ function renderSession(sys) {
   $("sheet").innerHTML = `
     <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
     <h3 class="ptitle">${esc(sys.title)}</h3>
-    ${modeSwitch(s)}
+    ${modeSwitch(s)}${outdatedBanner(sys)}
     <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${s.done || i < s.layer ? "done" : i === s.layer ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
     <div class="thread">${s.thread.map((e) => renderEntry(sys, e)).join("")}</div>
     <div id="live"></div>
@@ -311,7 +343,7 @@ function renderSession(sys) {
     $("yesRestart").onclick = () => { delete state.sessions[sys.id]; save(); refresh(sys); };
     $("noRestart").onclick = () => { $("restartBox").innerHTML = ""; };
   };
-  bindModeSwitch(sys);
+  bindModeSwitch(sys); bindOutdated(sys);
   if (s.done) return;
   const ta = $("answer");
   ta.value = s.draft || "";
@@ -330,8 +362,9 @@ function linkify(text) {
       (_, term, shown) => `<button type="button" class="term" data-term="${term}">${shown || term}</button>`)}</p>`).join("");
 }
 const layerCache = new Map();
+const layerKey = (sys, layer) => `${sys.id}@${sys.v || 1}/${layer}`;
 async function fetchLayerExplanation(sys, layer) {
-  const key = `${sys.id}/${layer}`;
+  const key = layerKey(sys, layer);
   if (layerCache.has(key)) return layerCache.get(key);
   const r = await api("/api/explain", { method: "POST", body: JSON.stringify({ systemId: sys.id, layer }) });
   layerCache.set(key, r.text);
@@ -356,7 +389,7 @@ function renderExplainMode(sys) {
   const list = systemsOf(), idx = list.indexOf(sys), next = list[idx + 1];
   const sections = [];
   for (let i = 0; i <= s.readUpTo; i++) {
-    const cached = layerCache.get(`${sys.id}/${i}`);
+    const cached = layerCache.get(layerKey(sys, i));
     sections.push(`<section class="xlayer" style="--c:${lvl(i).color}">
       <span class="tag">Layer ${i + 1} · ${lvl(i).name} — ${esc(sys.layers[i].name)}</span>
       <p class="xq">${esc(askFor(sys, i))}</p>
@@ -367,7 +400,7 @@ function renderExplainMode(sys) {
   $("sheet").innerHTML = `
     <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
     <h3 class="ptitle">${esc(sys.title)}</h3>
-    ${modeSwitch(s)}
+    ${modeSwitch(s)}${outdatedBanner(sys)}
     <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${i < s.readUpTo ? "done" : i === s.readUpTo ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
     <div class="xlayers">${sections.join("")}</div>
     <div class="actions" style="margin-top:18px">
@@ -378,7 +411,7 @@ function renderExplainMode(sys) {
       <button class="link" id="xDesign">Switch to design mode</button>
       ${next ? `<a class="btn" href="/s/${next.id}" data-nav="${next.id}">Next: ${esc(next.title)} →</a>` : `<a class="btn" href="/" data-nav="home">All systems →</a>`}
     </div>`;
-  bindModeSwitch(sys);
+  bindModeSwitch(sys); bindOutdated(sys);
   $("xDesign").onclick = () => { s.mode = "design"; save(); renderSession(sys); };
   const nb = $("xNext");
   if (nb) nb.onclick = () => { s.readUpTo++; save(); renderSession(sys); $(`xl-${s.readUpTo}`)?.scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -386,7 +419,7 @@ function renderExplainMode(sys) {
   // Fill in any explanations not loaded yet.
   (async () => {
     for (let i = 0; i <= s.readUpTo; i++) {
-      if (layerCache.has(`${sys.id}/${i}`)) continue;
+      if (layerCache.has(layerKey(sys, i))) continue;
       const box = () => $(`xl-${i}`);
       try {
         const text = await fetchLayerExplanation(sys, i);

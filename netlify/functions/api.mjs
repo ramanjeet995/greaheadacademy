@@ -73,6 +73,7 @@ async function getSystem(id) {
 
 // ---- explore any topic: Claude writes a new 5-layer lesson. Each topic is written once and cached,
 // so a second learner asking for the same machine costs nothing.
+const GEN_VERSION = 2; // bump when the topic prompt changes meaningfully
 const TOPIC_RE = /^[\p{L}\p{N} '’&(),./+-]{3,60}$/u;
 const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 
@@ -90,7 +91,8 @@ async function generate(req, context, user) {
   const id = `x-${slug}`;
   const topics = store("topics");
   const cached = await topics.get(id, { type: "json" });
-  if (cached) return json({ system: cached, existing: true });
+  // Lessons written with an older version of the prompt are rewritten on the next request.
+  if (cached?.v === GEN_VERSION) return json({ system: cached, existing: true });
 
   const d = day();
   const keys = [
@@ -108,25 +110,29 @@ async function generate(req, context, user) {
     }
   }
 
-  const prompt = `Write a short guided-discovery lesson for ${FIELD_NAME[field].toLowerCase()} engineering learners on: "${topic}".
+  const prompt = `Write a guided-discovery lesson in which the learner INVENTS "${topic}" themselves, step by step, the way engineers originally worked it out. (They picked the ${FIELD_NAME[field].toLowerCase()} section, but teach the topic as it really is — mechanical, electrical, electronic or computing hardware — don't force it into another discipline.)
 
-First decide if it fits. It must be a real physical machine, mechanism or engineered system. Weapons and military equipment ARE allowed (e.g. trebuchet, flintlock, bolt-action rifle, machine gun, tank, naval gun, fighter jet, missile guidance) — teach them like a museum or encyclopedia would: how the mechanism works, why it was designed that way, safety features, and how designs evolved historically.
-Reply with only {"error":"not_supported"} if the topic isn't a physical machine (e.g. a person, an abstract idea, software only), or if it is essentially a request for how to build, manufacture or modify a weapon (e.g. making a gun at home, 3D-printed guns, full-auto conversion, suppressors, ghost guns), explosives, propellants or other energetic materials and their chemistry, improvised weapons, or chemical, biological, nuclear or radiological weapons.
+First decide if it fits. It must be a real machine, device or engineered system (mechanical, electrical, electronic or computing hardware). Weapons and military equipment ARE allowed (e.g. trebuchet, flintlock, bolt-action rifle, machine gun, tank, naval gun, fighter jet, missile guidance) — teach them like a museum or encyclopedia would: how the mechanism works, why it was designed that way, safety features, and how designs evolved historically.
+Reply with only {"error":"not_supported"} if the topic isn't a real machine or device (e.g. a person, an abstract idea, software only), or if it is essentially a request for how to build, manufacture or modify a weapon (e.g. making a gun at home, 3D-printed guns, full-auto conversion, suppressors, ghost guns), explosives, propellants or other energetic materials and their chemistry, improvised weapons, or chemical, biological, nuclear or radiological weapons.
 For allowed weapon topics, stay at the level of mechanisms and history: never give construction steps, materials, dimensions, tolerances, recipes, or ways to defeat safety or legal controls.
 
-Otherwise the lesson is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and move, why designs are chosen, what goes wrong, and how the design evolved from older to modern solutions. Use real engineering history and real component names; if unsure of a date, give an approximate era. Be concise.
+START FROM THE NEED, NOT THE FINISHED THING. The starting "prompt" describes a concrete situation someone faces — the problem this invention solves, before it exists — WITHOUT naming or describing the invention, then asks how the learner would solve it. Never say "you've been handed a ..." or ask them to describe an existing device.
+Good example for "Raspberry Pi": "You need a whole computer to run a small robot, but it must fit in a space the size of a credit card and run from a phone charger. A normal PC is a big box full of separate parts. How would you shrink a complete computer that much? What would you combine, remove or change?"
+Good example for "steering system": "A car's front wheels must turn left and right when the driver turns a wheel inside the cabin. How would you make that happen?"
 
-Exactly 5 layers:
-1 Student — the basic layout: parts and how they connect (no "ask").
-2 Junior — the core mechanism: which one, how it moves, alternatives.
-3 Mid-level — refinement: geometry, feel, wear, what goes wrong.
-4 Senior — assistance and safety in the real world.
-5 Modern — what engineers build today.
-Layers 2–5 open with "ask": a concrete scenario (max 35 words) exposing the previous layer's limit and asking how they'd solve it.
+Each layer then goes one step deeper into how it is really done, following the real engineering of the topic:
+1 Student — the core idea: the basic approach that meets the need, and the main parts (no "ask").
+2 Junior — the key mechanism or technology that makes the idea work, and the alternatives.
+3 Mid-level — the problems that show up (heat, wear, power, failure, trade-offs) and how designs were refined.
+4 Senior — making it work in the real world: reliability, safety, cost, manufacturing at scale.
+5 Modern — what engineers build today and where it's heading.
+Layers 2–5 open with "ask": a concrete scenario (max 35 words) that exposes a limit of the previous layer's solution and asks how the learner would solve it — without giving the answer away.
 "real": how real designs do it, max 45 words.
 
+The lesson is method-driven: NO numbers, formulas or calculations — only which parts, how they connect and work, why designs are chosen, what goes wrong, and how the design evolved from older to modern solutions. Use real engineering history and real component names; if unsure of a date, give an approximate era. Be concise.
+
 Reply with only JSON:
-{"title":"short name","era":"e.g. 1900s → today","prompt":"starting question, max 50 words: a concrete situation, then ask how they'd make it work — parts, connections, movement","hints":["hint 1","hint 2"],"layers":[{"name":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
+{"title":"short name","era":"e.g. 1900s → today","prompt":"the need-first starting question, max 60 words","hints":["hint 1","hint 2"],"layers":[{"name":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."},{"name":"...","ask":"...","real":"..."}]}`;
 
   try {
     const client = new Anthropic({ apiKey: env("ANTHROPIC_API_KEY") });
@@ -151,7 +157,7 @@ Reply with only JSON:
       id, field, custom: true, topic,
       title: s(out.title, 60), era: s(out.era, 40), prompt: s(out.prompt, 500),
       hints: (Array.isArray(out.hints) ? out.hints : []).slice(0, 2).map((h) => s(h, 300)),
-      layers, created: Date.now(),
+      layers, v: GEN_VERSION, created: Date.now(),
     };
     await topics.setJSON(id, system);
     return json({ system });
@@ -324,13 +330,16 @@ async function remaining(username) {
 // and cached for everyone, and only uncached writes count against the per-IP and site-wide limits.
 const EXPLAIN_RULES = `Write for a complete beginner: plain words, short sentences, no maths, formulas or numbers-heavy specs. Use an everyday comparison where it helps. Wrap the key technical terms a beginner might not know in double square brackets exactly as written in the sentence, e.g. [[steering knuckle]] or [[tie rod|tie rods]] (term|text shown). Separate paragraphs with a blank line. Plain text only — no headings, lists markup, or bold. Weapons and military systems: explain mechanisms and history like a museum would; never construction steps, materials, dimensions, recipes, explosive or propellant chemistry, or ways to modify a weapon or defeat safety or legal controls.`;
 
+// Generated topics can be rewritten, so their cached explanations are keyed by version.
+const explainKey = (sys, layer) => (sys.custom ? `${sys.id}@${sys.v || 1}/${layer}` : `${sys.id}/${layer}`);
+
 async function explainLayer(req, context) {
   const body = await req.json().catch(() => ({}));
   const sys = await getSystem(body.systemId);
   const layer = Number.isInteger(body.layer) ? body.layer : -1;
   if (!sys || layer < 0 || layer >= sys.layers.length) return json({ error: "bad_request" }, 400);
   const cache = store("explain");
-  const key = `${sys.id}/${layer}`;
+  const key = explainKey(sys, layer);
   const cached = await cache.get(key);
   if (cached) return json({ text: cached, cached: true });
 
@@ -376,7 +385,10 @@ const norm = (s) => plainText(s).toLowerCase().replace(/[‘’]/g, "'").replace
 
 async function sourceText(src) {
   const [kind, ...rest] = String(src || "").split(":");
-  if (kind === "layer" && rest.length === 2) return store("explain").get(`${rest[0]}/${Number(rest[1])}`);
+  if (kind === "layer" && rest.length === 2) {
+    const sys = await getSystem(rest[0]);
+    return sys ? store("explain").get(explainKey(sys, Number(rest[1]))) : null;
+  }
   if (kind === "term" && rest.length) return store("terms").get(slugify(rest.join(":")));
   if (kind === "simplify" && /^[0-9a-f]{32}$/.test(rest[0] || "")) return store("simplify").get(rest[0]);
   return null;

@@ -32,19 +32,25 @@ Weapons and military systems are fine at the level of how the mechanism works an
 (like a museum or encyclopedia) — never construction steps, materials, dimensions, recipes, explosive or
 propellant chemistry, or ways to modify a weapon or defeat safety or legal controls.
 
+START FROM THE NEED, NOT THE FINISHED THING: the starting "prompt" describes a concrete situation — the problem
+this invention solves, before it exists — without naming or describing the invention, then asks how the learner
+would solve it. Never "you've been handed a ...". Example for "steering system": "A car's front wheels must turn
+left and right when the driver turns a wheel inside the cabin. How would you make that happen?" Teach the topic in
+its real discipline (mechanical, electrical, electronic or computing hardware).
+
 Write exactly 5 layers, going deeper and from older to modern solutions:
-1 (Student): the basic layout — the parts and how they connect.
-2 (Junior): the core mechanism — which mechanism, how it moves, the alternatives.
-3 (Mid-level): refinement — geometry, feel, wear, what goes wrong.
-4 (Senior): assistance and safety — making it work in the real world.
-5 (Modern): what engineers build today.
+1 (Student): the core idea — the basic approach that meets the need, and the main parts.
+2 (Junior): the key mechanism or technology that makes it work, and the alternatives.
+3 (Mid-level): the problems that show up (heat, wear, power, failure, trade-offs) and how designs were refined.
+4 (Senior): making it work in the real world — reliability, safety, cost, manufacturing at scale.
+5 (Modern): what engineers build today and where it's heading.
 
 Each layer after the first opens with a question: a concrete scenario that exposes the limit of the
 previous layer and asks the learner how they'd solve it. Layer 1 has no question (the starting prompt is it).
 
 Reply with only JSON, no prose:
 {{"title": "short name", "era": "e.g. 1900s → today",
-  "prompt": "the starting question: a concrete situation, then 'How would you make it work? Describe the parts, how they connect and how they move.'",
+  "prompt": "the need-first starting question (the problem, not the invention), max 60 words",
   "hints": ["hint 1 for the starting question", "hint 2"],
   "layers": [
     {{"name": "short layer name", "real": "2–3 sentences: how real designs do it at this layer"}},
