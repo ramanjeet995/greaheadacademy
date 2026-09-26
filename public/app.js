@@ -6,10 +6,9 @@ const LEVELS = [
   { name: "Senior", color: "var(--l4)" },
   { name: "Modern", color: "var(--l5)" },
 ];
-const FIELDS = [
-  { id: "mechanical", name: "Mechanical" },
-  { id: "electromechanical", name: "Electromechanical" },
-];
+let FIELDS = []; // loaded from /fields.json
+const fieldOf = (id = state.field) => FIELDS.find((f) => f.id === id) || FIELDS[0];
+const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48);
 const LAYER_BLURBS = [
   "The basic idea — the parts and how they connect",
   "The core mechanism — which one, and how it moves",
@@ -107,7 +106,7 @@ function renderAll(scroll) {
   const v = currentView();
   renderFields(); renderAccount(); renderPath(v); renderMain(v); renderNotes(v);
   const sys = v.type === "sys" ? byId(v.id) : null;
-  document.title = sys ? `How a ${sys.title} works — Gearhead Academy` : "Gearhead Academy — learn how machines work by designing them";
+  document.title = sys ? `How a ${sys.title} works — Gearhead Academy` : "Gearhead Academy — learn how things work by designing them";
   if (scroll) $("sheet").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
 }
 function renderFields() {
@@ -161,7 +160,9 @@ function renderPath(v) {
   const item = (s) => `<li><a class="sysbtn" href="/s/${s.id}" data-nav="${s.id}" ${v.type === "sys" && v.id === s.id ? `aria-current="page"` : ""}>
       <span>${esc(s.title)}</span><span class="era">${esc(s.era || "")}</span>${dots(s)}</a></li>`;
   const mine = customOf();
-  $("path").innerHTML = `<h2>${esc(FIELDS.find((f) => f.id === state.field).name)} systems</h2><ol class="syslist">${systemsOf().map(item).join("")}</ol>`
+  const builtins = systemsOf();
+  $("path").innerHTML = (builtins.length ? `<h2>${esc(fieldOf().name)} systems</h2><ol class="syslist">${builtins.map(item).join("")}</ol>`
+      : `<h2>${esc(fieldOf().name)}</h2><p class="note">Pick a topic on the right, or explore your own below.</p>`)
     + (mine.length ? `<h2 style="margin-top:18px">Your topics</h2><ol class="syslist">${mine.map(item).join("")}</ol>` : "")
     + exploreForm("side");
   bindExplore("side");
@@ -178,10 +179,10 @@ function renderMain(v) {
 // ---------------------------------------------------------------- explore any topic
 function exploreForm(where) {
   return `<form class="explore ${where}" id="explore-${where}">
-    <label for="topic-${where}">${where === "home" ? "Explore any machine" : "Explore another machine"}</label>
-    <div class="row"><input type="text" id="topic-${where}" maxlength="60" placeholder="${state.field === "mechanical" ? "e.g. Bicycle gears, Door lock, Jet engine" : "e.g. 3D printer, Car starter motor, Drone"}">
+    <label for="topic-${where}">${where === "home" ? "Explore any topic" : "Explore another topic"}</label>
+    <div class="row"><input type="text" id="topic-${where}" maxlength="60" placeholder="${esc(fieldOf().placeholder || "")}">
     <button class="btn ${where === "home" ? "primary" : ""}" type="submit">Explore</button></div>
-    <span class="note" id="topicMsg-${where}">${auth ? "Writes a new 5-layer lesson. Uses 1 of today's new-topic allowance." : "Sign in to explore new topics."}</span></form>`;
+    <span class="note" id="topicMsg-${where}">${auth ? "Writes a new 5-layer lesson. Uses 1 of today's new-topic allowance." : "Sign in to explore your own topics — the suggested ones are free to open."}</span></form>`;
 }
 function bindExplore(where) {
   const f = $(`explore-${where}`);
@@ -191,21 +192,47 @@ async function explore(where) {
   const input = $(`topic-${where}`), msg = $(`topicMsg-${where}`), btn = $(`explore-${where}`).querySelector("button");
   const topic = input.value.trim().replace(/\s+/g, " ");
   if (topic.length < 3) { msg.textContent = "Type a machine or system, e.g. \"bicycle gears\"."; input.focus(); return; }
-  if (!auth) { msg.textContent = "Sign in on the left first — any username and PIN."; $("uName")?.focus(); return; }
   btn.disabled = true;
   msg.innerHTML = `<span class="thinking">Writing a lesson on ${esc(topic)}</span>`;
   try {
     const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic, field: state.field }) });
-    const sys = r.system;
-    const i = state.custom.findIndex((x) => x.id === sys.id);
-    if (i < 0) state.custom.push(sys);
-    else if ((state.custom[i].v || 1) !== (sys.v || 1)) { state.custom[i] = sys; delete state.sessions[sys.id]; } // rewritten lesson
-    save();
-    go({ type: "sys", id: sys.id });
+    adoptTopic(r.system);
   } catch (e) {
     msg.textContent = e.data?.message || "Couldn't write that lesson. Try again.";
     btn.disabled = false;
   }
+}
+// Add (or refresh) a generated topic in this learner's list and open it.
+function adoptTopic(sys) {
+  if (!sys.custom) return go({ type: "sys", id: sys.id }); // it was a built-in system
+  const i = state.custom.findIndex((x) => x.id === sys.id);
+  if (i < 0) state.custom.push(sys);
+  else if ((state.custom[i].v || 1) !== (sys.v || 1)) { state.custom[i] = sys; delete state.sessions[sys.id]; } // rewritten lesson
+  save();
+  go({ type: "sys", id: sys.id });
+}
+// Suggested topics: written once for everyone, open without signing in.
+async function openSuggestion(name, btn) {
+  const id = `x-${slugify(name)}`;
+  if (byId(id)) return go({ type: "sys", id });
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.innerHTML = `<span class="thinking">Opening</span>`;
+  try {
+    const r = await api("/api/generate", { method: "POST", body: JSON.stringify({ topic: name, field: state.field }) });
+    adoptTopic(r.system);
+  } catch (e) {
+    btn.disabled = false; btn.textContent = label;
+    const note = btn.closest(".card")?.querySelector(".note");
+    if (note) note.textContent = e.data?.message || "Couldn't open it. Try again.";
+  }
+}
+// Shown on every AI-written lesson, plus a health notice in the medicine field.
+function trustNote(sys) {
+  const notes = [];
+  if (sys.custom) notes.push("AI-written lesson, not yet reviewed by an expert — double-check anything important.");
+  if (sys.field === "biology") notes.push("Educational only — not medical advice.");
+  return notes.length ? `<p class="trust">${notes.map(esc).join(" ")}</p>` : "";
 }
 function renderNotes(v) {
   const sys = v.type === "sys" ? byId(v.id) : null;
@@ -225,22 +252,33 @@ function homeNotes() {
 
 // ---------------------------------------------------------------- home
 function renderHome() {
-  const list = systemsOf();
+  const list = systemsOf(), field = fieldOf();
+  const suggestions = (field.suggestions || []).filter((n) => !list.some((s) => slugify(s.title) === slugify(n)));
   $("sheet").innerHTML = `
-    <p class="eyebrow">${esc(FIELDS.find((f) => f.id === state.field).name)} engineering</p>
-    <h3 class="ptitle">Pick a system to design</h3>
+    <p class="eyebrow">${esc(field.name)}</p>
+    <h3 class="ptitle">Pick a topic to design</h3>
+    ${field.reviewed ? "" : `<p class="trust">Lessons in ${esc(field.name)} are written by AI and haven't been reviewed by an expert yet. They're a starting point — double-check anything important.${field.id === "biology" ? " Educational only — not medical advice." : ""}</p>`}
     <p class="intro">You'll be asked how you would make it work. Answer in plain words — parts, how they connect, how they move, why you'd choose them. No calculations. You'll see how your method compares with real designs, then go one layer deeper, following the mechanism you chose.</p>
     <ol class="ladder">${LEVELS.map((l, i) => `<li style="--c:${l.color}"><span class="lvl">Layer ${i + 1} · ${l.name}</span><span>${LAYER_BLURBS[i]}</span></li>`).join("")}</ol>
     ${exploreForm("home")}
-    <h4 class="sec">Systems</h4>
+    ${list.length ? `<h4 class="sec">Systems</h4>` : ""}
     <div class="cards">${list.map((s) => {
       const st = state.sessions[s.id];
       return `<div class="card"><div class="row"><span class="era">${esc(s.era || "")}</span>${dots(s)}</div>
         <h5>${esc(s.title)}</h5><p>${esc(s.prompt.split(". ")[0])}.</p>
         <div class="row"><span class="note">${st?.done ? "Completed" : st ? `On layer ${reached(s) + 1} of ${s.layers.length}` : `${s.layers.length} layers`}</span>
         <a class="btn ${st && !st.done ? "primary" : ""}" href="/s/${s.id}" data-nav="${s.id}">${st?.done ? "Review" : st ? "Continue" : "Start"}</a></div></div>`;
-    }).join("")}</div>`;
+    }).join("")}</div>
+    ${suggestions.length ? `<h4 class="sec">${list.length ? "More topics to explore" : "Topics"}</h4>
+    <div class="cards">${suggestions.map((n) => {
+      const sys = byId(`x-${slugify(n)}`), st = sys && state.sessions[sys.id];
+      return `<div class="card"><div class="row"><span class="era">${sys?.era ? esc(sys.era) : "AI-written"}</span>${sys ? dots(sys) : ""}</div>
+        <h5>${esc(n)}</h5>
+        <div class="row"><span class="note">${st?.done ? "Completed" : st ? `On layer ${reached(sys) + 1} of 5` : "5 layers"}</span>
+        <button class="btn" type="button" data-suggest="${esc(n)}">${st?.done ? "Review" : st ? "Continue" : "Start"}</button></div></div>`;
+    }).join("")}</div>` : ""}`;
   bindExplore("home");
+  $("sheet").querySelectorAll("[data-suggest]").forEach((b) => (b.onclick = () => openSuggestion(b.dataset.suggest, b)));
 }
 
 // ---------------------------------------------------------------- guided session
@@ -315,9 +353,9 @@ function renderSession(sys) {
   const list = systemsOf(), idx = list.indexOf(sys);
   const next = list[idx + 1];
   $("sheet").innerHTML = `
-    <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
+    <p class="eyebrow">${esc(fieldOf(sys.field).name)} · ${esc(sys.era || "")}</p>
     <h3 class="ptitle">${esc(sys.title)}</h3>
-    ${modeSwitch(s)}${outdatedBanner(sys)}
+    ${trustNote(sys)}${modeSwitch(s)}${outdatedBanner(sys)}
     <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${s.done || i < s.layer ? "done" : i === s.layer ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
     <div class="thread">${s.thread.map((e) => renderEntry(sys, e)).join("")}</div>
     <div id="live"></div>
@@ -398,9 +436,9 @@ function renderExplainMode(sys) {
     </section>`);
   }
   $("sheet").innerHTML = `
-    <p class="eyebrow">${esc(FIELDS.find((f) => f.id === sys.field).name)} · ${esc(sys.era || "")}</p>
+    <p class="eyebrow">${esc(fieldOf(sys.field).name)} · ${esc(sys.era || "")}</p>
     <h3 class="ptitle">${esc(sys.title)}</h3>
-    ${modeSwitch(s)}${outdatedBanner(sys)}
+    ${trustNote(sys)}${modeSwitch(s)}${outdatedBanner(sys)}
     <div class="steps" aria-label="Layers">${sys.layers.map((l, i) => `<span class="step ${i < s.readUpTo ? "done" : i === s.readUpTo ? "now" : ""}" style="--c:${lvl(i).color}"><small>${lvl(i).name}</small>${esc(l.name)}</span>`).join("")}</div>
     <div class="xlayers">${sections.join("")}</div>
     <div class="actions" style="margin-top:18px">
@@ -650,6 +688,7 @@ function fillAds() {
     $("sheet").innerHTML = `<p class="err">Couldn't load the systems. Refresh the page to try again.</p>`;
     return;
   }
+  try { FIELDS = await (await fetch("/fields.json")).json(); } catch { FIELDS = [{ id: "mechanical", name: "Mechanical", suggestions: [] }]; }
   if (!FIELDS.some((f) => f.id === state.field)) state.field = "mechanical";
   try { freeDaily = (await (await fetch("/api/config")).json()).freeDaily ?? 5; } catch {}
   renderAll(false);

@@ -1,6 +1,6 @@
 # Gearhead Academy
 
-Learn how machines work by designing them. Learners pick a system (steering, brakes, elevator…), describe how they'd build it in plain words, compare it with real designs, and go one layer deeper — Student → Junior → Mid-level → Senior → Modern.
+Learn how things work by designing them. Learners pick a topic (steering, a bridge, the power grid, a search engine, the heart…), describe how they'd build it in plain words, compare it with real designs, and go one layer deeper — Student → Junior → Mid-level → Senior → Modern.
 
 Hosted on **Netlify**: a static site built from `public/`, one **Netlify Function** for the API, **Netlify Blobs** for storage, the **Claude API** for the optional AI mentor, and **Google AdSense** for revenue.
 
@@ -16,6 +16,21 @@ Hosted on **Netlify**: a static site built from `public/`, one **Netlify Functio
 | Explore any machine | Signed-in learners can type any machine and Claude writes a new 5-layer lesson (≈ $0.01 each on Haiku). Each topic is written once and cached, so the next learner who asks for it costs nothing. Capped at 2 new topics per user per day, 200 site-wide. |
 
 Keep the AI caps low until AdSense shows your real revenue per 1,000 page views, then raise `FREE_DAILY_REPLIES` only as far as revenue covers it.
+
+## Fields
+
+Defined in `public/fields.json` (name, teaching guidance for the AI, placeholder, suggested topics, `reviewed` flag):
+
+| Field | Content |
+|---|---|
+| Mechanical | 5 hand-written systems + suggested topics |
+| Electromechanical & robotics | 5 hand-written systems + suggested topics |
+| Electrical & electronics | suggested topics (AI-written, unreviewed) |
+| Civil engineering | suggested topics (AI-written, unreviewed) |
+| Software & coding | suggested topics (AI-written, unreviewed) |
+| Human body & medicine | suggested topics (AI-written, unreviewed, educational-only notice) |
+
+Suggested topics open **without signing in**: each is written once by Claude on first click and shared with everyone (≈ 46 topics × ≈ $0.01 ≈ $0.50 total). Every AI-written lesson shows an "AI-written, not yet reviewed" label. To add a field or topic, edit `fields.json` and deploy. To promote a good AI-written lesson to a permanent, indexed page, review it and add it to `systems.json`.
 
 ## Project layout
 

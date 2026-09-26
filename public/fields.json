@@ -1,0 +1,50 @@
+[
+ {
+  "id": "mechanical",
+  "name": "Mechanical",
+  "reviewed": true,
+  "placeholder": "e.g. Bicycle gears, Door lock, Jet engine",
+  "guide": "Teach mechanisms: parts, how they connect and move, forces, wear and failure.",
+  "suggestions": ["Bicycle gears", "Door lock", "Mechanical watch", "Refrigerator", "Jet engine", "Hydraulic excavator"]
+ },
+ {
+  "id": "electromechanical",
+  "name": "Electromechanical & robotics",
+  "reviewed": true,
+  "placeholder": "e.g. Robot vacuum, Drone, 3D printer",
+  "guide": "Teach how motors, sensors, power electronics and control work together with the mechanics; for robots, cover sensing, deciding and acting.",
+  "suggestions": ["Robot vacuum", "Quadcopter drone", "Self-balancing robot", "3D printer", "Robotic gripper", "Warehouse robot"]
+ },
+ {
+  "id": "electrical",
+  "name": "Electrical & electronics",
+  "reviewed": false,
+  "placeholder": "e.g. Transformer, Battery, Solar panel",
+  "guide": "Teach how electricity is generated, moved, stored, switched and controlled: the components, what each does, and why designs are chosen. Explain ideas like voltage and current in plain words, without calculations.",
+  "suggestions": ["Electric power grid", "Transformer", "Rechargeable battery", "Solar panel", "Circuit breaker", "Phone charger", "LED light bulb", "Microchip"]
+ },
+ {
+  "id": "civil",
+  "name": "Civil engineering",
+  "reviewed": false,
+  "placeholder": "e.g. Suspension bridge, Dam, Skyscraper",
+  "guide": "Teach how structures and infrastructure carry loads, resist nature (wind, water, earthquakes, soil) and are built and maintained — the structural idea first, then materials, construction and safety.",
+  "suggestions": ["Suspension bridge", "Skyscraper", "Dam", "Tunnel under a river", "Earthquake-resistant building", "City water supply", "Sewage treatment", "Highway"]
+ },
+ {
+  "id": "software",
+  "name": "Software & coding",
+  "reviewed": false,
+  "placeholder": "e.g. Search engine, Database, Git",
+  "guide": "Teach software as problem-solving: the idea, the data structures and algorithms, trade-offs, and how real systems scale. Describe approaches in plain words — no code or syntax required, though learners may use pseudocode.",
+  "suggestions": ["Search engine", "Database", "Web browser", "File compression", "Version control (Git)", "Recommendation system", "Operating system", "Safe password storage"]
+ },
+ {
+  "id": "biology",
+  "name": "Human body & medicine",
+  "reviewed": false,
+  "placeholder": "e.g. Heart, Kidneys, Immune system",
+  "guide": "Teach the body as a set of solutions to needs (every cell needs oxygen; waste must be removed), and medical technology as engineering that supports or replaces those solutions. Educational only: no diagnosis, treatment or dosing advice, and nothing about making pathogens or toxins more dangerous.",
+  "suggestions": ["Heart and circulation", "Lungs and breathing", "Kidneys", "Immune system", "Eye", "Nervous system", "Vaccines", "Pacemaker"]
+ }
+]

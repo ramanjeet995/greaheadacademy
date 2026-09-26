@@ -52,6 +52,7 @@ aside.path{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);max-hei
 .account input[type=text],.account input[type=password]{flex:1;min-width:0;font:14px var(--body);padding:9px 10px;border:1px solid var(--rule);border-radius:4px;background:var(--paper);color:var(--ink)}
 .account label.toggle{display:flex;gap:8px;align-items:center;cursor:pointer}
 .account .who{font-weight:600}
+.trust{margin:0 0 14px;padding:10px 12px;border:1px dashed var(--warn);border-radius:4px;font-size:13px;color:var(--ink);max-width:74ch}
 .explore{display:grid;gap:8px}
 .explore label{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .explore .row{display:flex;gap:6px}

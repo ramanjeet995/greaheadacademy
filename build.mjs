@@ -12,7 +12,8 @@ const SITE = (env.SITE_URL || env.URL || "").replace(/\/$/, ""); // Netlify sets
 const ADSENSE_CLIENT = env.ADSENSE_CLIENT || "";
 const SLOTS = { top: env.AD_SLOT_TOP || "", side: env.AD_SLOT_SIDE || "", bottom: env.AD_SLOT_BOTTOM || "" };
 const LEVELS = ["Student", "Junior", "Mid-level", "Senior", "Modern"];
-const FIELD_NAME = { mechanical: "Mechanical", electromechanical: "Electromechanical" };
+const FIELDS = JSON.parse(fs.readFileSync(path.join(SRC, "fields.json"), "utf8"));
+const FIELD_NAME = Object.fromEntries(FIELDS.map((f) => [f.id, f.name]));
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const systems = JSON.parse(fs.readFileSync(path.join(SRC, "systems.json"), "utf8"));
@@ -54,7 +55,7 @@ for (const page of ["about.html", "privacy.html"]) {
 // One page per system.
 for (const sys of systems) {
   const article = `<article class="ssr">
-  <p class="eyebrow">${esc(FIELD_NAME[sys.field] || "")} engineering · ${esc(sys.era || "")}</p>
+  <p class="eyebrow">${esc(FIELD_NAME[sys.field] || "")} · ${esc(sys.era || "")}</p>
   <h2>How does a ${esc(sys.title.toLowerCase())} work?</h2>
   <p>${esc(sys.prompt)}</p>
   <h3>The five layers</h3>
