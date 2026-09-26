@@ -117,7 +117,8 @@ The generator uses `claude-opus-5` for quality (a few cents per system) with ser
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Required for the AI mentor |
 | `PIN_PEPPER` | — | Required; secret mixed into PIN hashes |
-| `MODEL` | `claude-haiku-4-5` | Model for the AI mentor |
+| `MODEL` | `claude-haiku-4-5` | Default model for everything AI (explanations, topics, mentor) |
+| `MENTOR_MODEL` | `MODEL` | Model for mentor replies and questions — the step that needs judgment. `claude-sonnet-5` gives noticeably better feedback at roughly twice the cost (~$0.01/reply) |
 | `FREE_DAILY_REPLIES` | 5 | AI replies (answers + hints) per user per day |
 | `IP_DAILY_REPLIES` | 15 | Per IP address per day — stops one person farming usernames |
 | `GLOBAL_DAILY_REPLIES` | 1000 | Whole-site ceiling per day |

@@ -152,7 +152,7 @@
   "field": "mechanical",
   "title": "Military tank",
   "era": "1916 → today",
-  "prompt": "It's 1916. Armies are stuck in trenches, barbed wire and deep mud, and wheeled armoured cars bog down. Describe a vehicle that could cross trenches and mud while protecting its crew. What would carry it, and what shape would it be?",
+  "prompt": "It's 1916. Armies are stuck in trenches, barbed wire and deep mud, and wheeled armoured cars bog down. Describe a vehicle that could cross trenches and mud while protecting its crew. What would it move on instead of wheels, and what shape would it be?",
   "hints": [
    "Wheels sink because all the weight sits on small patches. What spreads it out?",
    "What stops a vehicle dropping nose-first into a trench?"
