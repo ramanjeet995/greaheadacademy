@@ -40,11 +40,8 @@ function render(html, { title, description, canonical, article, appendArticle })
 const shell = fs.readFileSync(path.join(SRC, "index.html"), "utf8");
 const write = (file, content) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); };
 
-// Home: shell + links to every system.
-write(path.join(OUT, "index.html"), render(shell, {
-  canonical: "/",
-  appendArticle: `<h3>All systems</h3><ul class="links">${systems.map((s) => `<li><a href="/s/${s.id}" data-nav="${s.id}">How a ${esc(s.title.toLowerCase())} works</a></li>`).join("")}</ul>`,
-}));
+// Home.
+write(path.join(OUT, "index.html"), render(shell, { canonical: "/" }));
 
 // Other static pages.
 for (const page of ["about.html", "privacy.html"]) {

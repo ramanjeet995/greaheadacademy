@@ -246,8 +246,7 @@ function renderNotes(v) {
     ${sys.layers.map((l, i) => `<h4>Layer ${i + 1} · ${esc(l.name)}</h4><p>${esc(l.real)}</p>`).join("")}</details>`;
 }
 function homeNotes() {
-  return `<h2>What is Gearhead Academy?</h2><p>Pick a machine and you're asked how you would make it work. You answer in plain words, compare your idea with real designs, then go one layer deeper — from the basic idea to what engineers build today.</p>
-    <h3>All systems</h3><ul class="links">${SYSTEMS.map((s) => `<li><a href="/s/${s.id}" data-nav="${s.id}">How a ${esc(s.title.toLowerCase())} works</a></li>`).join("")}</ul>`;
+  return `<h2>What is Gearhead Academy?</h2><p>Pick a machine and you're asked how you would make it work. You answer in plain words, compare your idea with real designs, then go one layer deeper — from the basic idea to what engineers build today.</p>`;
 }
 
 // ---------------------------------------------------------------- home
