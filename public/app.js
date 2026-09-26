@@ -251,6 +251,23 @@ function homeNotes() {
 }
 
 // ---------------------------------------------------------------- home
+// How feedback works — explained on the home page and at the start of every lesson.
+function feedbackPanel() {
+  return `<section class="howfb" aria-label="How feedback works">
+    <h4 class="sec" style="margin-top:0">How feedback works</h4>
+    <div class="howfb-cols">
+      <div class="${auth ? "" : "here"}"><b>Without signing in</b><p>After each answer you see a fixed "how real designs do it" answer, then move to the next layer. Free, but it doesn't read what you wrote.</p></div>
+      <div class="${auth ? "here" : ""}"><b>Signed in — free, just a username and PIN</b><p>The AI mentor reads your answer, says what holds up and what's missing, and asks follow-up questions about <em>your</em> design. ${freeDaily} replies a day; after that you get the fixed answers.</p></div>
+    </div>
+    <p class="note">${auth ? `You're signed in as <b>${esc(auth.username)}</b>. ${state.aiOn ? `AI mentor on — ${auth.remaining ?? "–"} replies left today.` : "AI mentor is switched off — turn it on under Submit or in the sidebar."}` : `Sign in from the box at the top of the sidebar${matchMedia("(max-width: 860px)").matches ? " (scroll up)" : " on the left"}.`}</p>
+  </section>`;
+}
+function pathNote() {
+  if (!auth) return "Not signed in: after you answer you'll see the fixed built-in answer, not feedback on your own design. Sign in (free) to get the AI mentor.";
+  if (!state.aiOn) return "AI mentor is off: you'll see the fixed built-in answer. Turn it on under Submit.";
+  if ((auth.remaining ?? 1) <= 0) return "No AI mentor replies left today: you'll see the fixed built-in answer until tomorrow.";
+  return "AI mentor on: it will read your answer and give feedback on your own design.";
+}
 function renderHome() {
   const list = systemsOf(), field = fieldOf();
   const suggestions = (field.suggestions || []).filter((n) => !list.some((s) => slugify(s.title) === slugify(n)));
@@ -260,6 +277,7 @@ function renderHome() {
     ${field.reviewed ? "" : `<p class="trust">Lessons in ${esc(field.name)} are written by AI and haven't been reviewed by an expert yet. They're a starting point — double-check anything important.${field.id === "biology" ? " Educational only — not medical advice." : ""}</p>`}
     <p class="intro">You'll be asked how you would make it work. Answer in plain words — parts, how they connect, how they move, why you'd choose them. No calculations. You'll see how your method compares with real designs, then go one layer deeper, following the mechanism you chose.</p>
     <ol class="ladder">${LEVELS.map((l, i) => `<li style="--c:${l.color}"><span class="lvl">Layer ${i + 1} · ${l.name}</span><span>${LAYER_BLURBS[i]}</span></li>`).join("")}</ol>
+    ${feedbackPanel()}
     ${exploreForm("home")}
     ${list.length ? `<h4 class="sec">Systems</h4>` : ""}
     <div class="cards">${list.map((s) => {
@@ -283,7 +301,7 @@ function renderHome() {
 
 // ---------------------------------------------------------------- guided session
 function renderEntry(sys, e) {
-  if (e.type === "problem") return `<div class="msg mentor"><div class="who">Mentor · Layer 1 · ${lvl(0).name}</div><div class="body"><p>${esc(sys.prompt)}</p><p class="note">No calculations needed — describe the parts, how they connect and move, and why.</p></div></div>`;
+  if (e.type === "problem") return `<div class="msg mentor"><div class="who">Mentor · Layer 1 · ${lvl(0).name}</div><div class="body"><p>${esc(sys.prompt)}</p><p class="note">No calculations needed — describe the parts, how they connect and move, and why.</p><p class="note">${pathNote()}</p></div></div>`;
   if (e.type === "answer") return `<div class="msg you"><div class="who">You · Layer ${e.layer + 1}</div><div class="body">${esc(e.text)}</div></div>`;
   if (e.type === "feedback") {
     const v = e.verdict === "solid" ? "v-solid" : e.verdict === "partial" ? "v-partial" : "v-off";
@@ -298,7 +316,7 @@ function renderEntry(sys, e) {
       <div class="cols"><div class="got"><h6>Holds up</h6><ul>${li(e.holds)}</ul></div><div class="miss"><h6>Missing or different</h6><ul>${li(e.gaps)}</ul></div></div>
       <div class="ask ${kind[0]}" ${next != null && e.action === "advance" ? `style="--c:${lvl(next).color}"` : ""}><span class="tag">${kind[1]}</span>${esc(e.question)}</div></div></div>`;
   }
-  if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)} · built-in answer</span>${esc(sys.layers[e.layer].real)}</div></div>`;
+  if (e.type === "real") return `<div class="msg mentor real"><div class="who">Mentor</div><div class="body"><span class="tag">How real designs do it · ${esc(sys.layers[e.layer].name)} · built-in answer</span>${esc(sys.layers[e.layer].real)}${auth ? "" : `<p class="note" style="margin:10px 0 0">This is the same fixed answer everyone sees — it doesn't look at what you wrote. Sign in (free, any username and PIN) to get the AI mentor's feedback on your own design, then use “Start this system over” to resubmit.</p>`}</div></div>`;
   if (e.type === "ask") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body"><div class="ask" style="margin-top:0;--c:${lvl(e.layer).color}"><span class="tag">Layer ${e.layer + 1} · ${lvl(e.layer).name} — ${esc(sys.layers[e.layer].name)}</span>${esc(askFor(sys, e.layer))}</div></div></div>`;
   if (e.type === "hint") return `<div class="msg mentor"><div class="who">Mentor</div><div class="body hintbox"><span class="tag">Hint</span>${esc(e.text)}</div></div>`;
   if (e.type === "explain") return `<div class="msg mentor"><div class="who">Mentor · explained</div><div class="body"><span class="tag">Layer ${e.layer + 1} explained — tap underlined words, or select a hard passage to simplify it</span><div class="xbody" data-src="layer:${sys.id}:${e.layer}">${linkify(e.text)}</div></div></div>`;
